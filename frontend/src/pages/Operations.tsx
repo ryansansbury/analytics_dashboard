@@ -6,12 +6,15 @@ import { BarChart } from '../components/charts/BarChart';
 import { FunnelChart } from '../components/charts/FunnelChart';
 import { DataTable } from '../components/tables/DataTable';
 import { formatCurrency } from '../utils/formatters';
-import { usePipeline, useSalesPerformance } from '../hooks/useApi';
+import { usePipeline, useSalesPerformance, useCycleTime } from '../hooks/useApi';
+import { useFilters } from '../hooks/useFilters';
 
 export function Operations() {
+  const { filters } = useFilters();
   // Fetch real data from API
   const { data: pipelineData, isLoading: pipelineLoading } = usePipeline();
   const { data: salesReps, isLoading: salesLoading } = useSalesPerformance();
+  const { data: cycleTimeData } = useCycleTime();
 
   // Transform pipeline data for funnel
   const funnelData = (pipelineData || []).map((item, index, arr) => ({
@@ -43,14 +46,14 @@ export function Operations() {
     });
   }
 
-  // Static cycle time (would need timestamp tracking to calculate dynamically)
-  const cycleTimeData = [
+  // Use cycle time from API
+  const cycleData = cycleTimeData || [
     { stage: 'Lead to Qualified', avgDays: 8 },
     { stage: 'Qualified to Proposal', avgDays: 12 },
     { stage: 'Proposal to Negotiation', avgDays: 15 },
     { stage: 'Negotiation to Close', avgDays: 7 },
   ];
-  const totalCycleTime = cycleTimeData.reduce((sum, item) => sum + item.avgDays, 0);
+  const totalCycleTime = cycleData.reduce((sum, item) => sum + item.avgDays, 0);
 
   // Transform sales reps data (take top 10)
   const salesRepsData = (salesReps || []).slice(0, 10).map(rep => ({
@@ -68,7 +71,7 @@ export function Operations() {
     <div className="min-h-screen">
       <Header
         title="Operations"
-        subtitle="Sales pipeline, team performance, and deal metrics"
+        subtitle={`Data from ${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
       />
 
       <div className="p-6 space-y-6">
@@ -129,7 +132,7 @@ export function Operations() {
         {/* Cycle Time */}
         <ChartCard title="Deal Cycle Time" subtitle="Average days spent in each stage">
           <BarChart
-            data={cycleTimeData}
+            data={cycleData}
             xKey="stage"
             yKeys={['avgDays']}
             formatY="number"

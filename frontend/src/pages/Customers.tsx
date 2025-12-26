@@ -63,9 +63,9 @@ export function Customers() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KPICard
-            label="Total Customers"
+            label="Active Customers"
             value={overview?.total || 0}
-            changePercent={0}
+            changePercent={overview?.totalChange || 0}
             format="number"
             icon={<Users className="h-5 w-5" />}
             loading={overviewLoading}
@@ -73,7 +73,7 @@ export function Customers() {
           <KPICard
             label="New This Period"
             value={overview?.new || 0}
-            changePercent={0}
+            changePercent={overview?.newChange || 0}
             format="number"
             icon={<UserPlus className="h-5 w-5" />}
             loading={overviewLoading}
@@ -81,7 +81,7 @@ export function Customers() {
           <KPICard
             label="Churned"
             value={overview?.churned || 0}
-            changePercent={0}
+            changePercent={overview?.churnedChange || 0}
             format="number"
             icon={<UserMinus className="h-5 w-5" />}
             loading={overviewLoading}
@@ -89,7 +89,7 @@ export function Customers() {
           <KPICard
             label="At Risk"
             value={overview?.atRisk || 0}
-            changePercent={0}
+            changePercent={overview?.atRiskChange || 0}
             format="number"
             icon={<AlertTriangle className="h-5 w-5" />}
             loading={overviewLoading}

@@ -112,9 +112,13 @@ export const customerApi = {
   getOverview: (dateRange: DateRange) =>
     fetchApi<{
       total: number;
+      totalChange: number;
       new: number;
+      newChange: number;
       churned: number;
+      churnedChange: number;
       atRisk: number;
+      atRiskChange: number;
     }>(
       `/customers/overview${buildQueryString({
         start_date: dateRange.startDate,
@@ -130,7 +134,13 @@ export const customerApi = {
       })}`
     ),
 
-  getCohorts: () => fetchApi<CohortData[]>('/customers/cohorts'),
+  getCohorts: (dateRange: DateRange) =>
+    fetchApi<CohortData[]>(
+      `/customers/cohorts${buildQueryString({
+        start_date: dateRange.startDate,
+        end_date: dateRange.endDate,
+      })}`
+    ),
 
   getLifetimeValue: () =>
     fetchApi<{ range: string; count: number; percentage: number }[]>(
@@ -151,17 +161,33 @@ export const customerApi = {
 
 // Operations API
 export const operationsApi = {
-  getPipeline: () => fetchApi<PipelineStage[]>('/operations/pipeline'),
+  getPipeline: (dateRange: DateRange) =>
+    fetchApi<PipelineStage[]>(
+      `/operations/pipeline${buildQueryString({
+        start_date: dateRange.startDate,
+        end_date: dateRange.endDate,
+      })}`
+    ),
 
-  getSalesPerformance: () => fetchApi<SalesRep[]>('/operations/sales-performance'),
+  getSalesPerformance: (dateRange: DateRange) =>
+    fetchApi<SalesRep[]>(
+      `/operations/sales-performance${buildQueryString({
+        start_date: dateRange.startDate,
+        end_date: dateRange.endDate,
+      })}`
+    ),
 
   getConversionRates: () =>
     fetchApi<{ fromStage: string; toStage: string; rate: number }[]>(
       '/operations/conversion-rates'
     ),
 
-  getCycleTime: () =>
-    fetchApi<{ stage: string; avgDays: number }[]>('/operations/cycle-time'),
+  getCycleTime: (dateRange: DateRange) =>
+    fetchApi<{ stage: string; avgDays: number }[]>(
+      `/operations/cycle-time${buildQueryString({
+        start_date: dateRange.startDate,
+      })}`
+    ),
 
   getOpportunities: (stage?: string, limit = 20) =>
     fetchApi<PipelineOpportunity[]>(
@@ -171,19 +197,27 @@ export const operationsApi = {
 
 // Forecasting API
 export const forecastingApi = {
-  getRevenueForecast: (periods = 6) =>
+  getRevenueForecast: (periods = 6, dateRange?: DateRange) =>
     fetchApi<ForecastDataPoint[]>(
-      `/forecasting/revenue${buildQueryString({ periods })}`
+      `/forecasting/revenue${buildQueryString({
+        periods,
+        start_date: dateRange?.startDate,
+      })}`
     ),
 
-  getPipelineForecast: () =>
+  getPipelineForecast: (dateRange?: DateRange) =>
     fetchApi<{ month: string; weighted: number; best: number; worst: number }[]>(
-      '/forecasting/pipeline'
+      `/forecasting/pipeline${buildQueryString({
+        start_date: dateRange?.startDate,
+      })}`
     ),
 
-  getChurnRisk: (limit = 10) =>
+  getChurnRisk: (limit = 10, dateRange?: DateRange) =>
     fetchApi<ChurnRiskCustomer[]>(
-      `/forecasting/churn-risk${buildQueryString({ limit })}`
+      `/forecasting/churn-risk${buildQueryString({
+        limit,
+        start_date: dateRange?.startDate,
+      })}`
     ),
 
   getSeasonality: () =>

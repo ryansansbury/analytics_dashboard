@@ -7,8 +7,11 @@ import { BarChart } from '../components/charts/BarChart';
 import { DataTable } from '../components/tables/DataTable';
 import { formatCurrency, CHART_COLORS } from '../utils/formatters';
 import { useRevenueForecast, useChurnRisk } from '../hooks/useApi';
+import { useFilters } from '../hooks/useFilters';
 
 export function Forecasting() {
+  const { filters } = useFilters();
+
   // Fetch real data from API
   const { data: revenueForecast, isLoading: forecastLoading } = useRevenueForecast(6);
   const { data: churnRiskData, isLoading: churnLoading } = useChurnRisk(10);
@@ -65,7 +68,7 @@ export function Forecasting() {
     <div className="min-h-screen">
       <Header
         title="Forecasting"
-        subtitle="ML-powered predictions and scenario analysis"
+        subtitle={`Analysis based on data from ${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
       />
 
       <div className="p-6 space-y-6">

@@ -115,7 +115,16 @@ export function useTopProducts(
 // Customer hooks
 export function useCustomerOverview(
   options?: Omit<
-    UseQueryOptions<{ total: number; new: number; churned: number; atRisk: number }>,
+    UseQueryOptions<{
+      total: number;
+      totalChange: number;
+      new: number;
+      newChange: number;
+      churned: number;
+      churnedChange: number;
+      atRisk: number;
+      atRiskChange: number;
+    }>,
     'queryKey' | 'queryFn'
   >
 ) {
@@ -147,10 +156,12 @@ export function useCustomerSegments(
 export function useCustomerCohorts(
   options?: Omit<UseQueryOptions<CohortData[]>, 'queryKey' | 'queryFn'>
 ) {
+  const { filters } = useFilters();
+
   return useQuery({
-    queryKey: ['customers', 'cohorts'],
-    queryFn: () => customerApi.getCohorts(),
-    staleTime: 10 * 60 * 1000,
+    queryKey: ['customers', 'cohorts', filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => customerApi.getCohorts(filters.dateRange),
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -163,7 +174,7 @@ export function useAtRiskCustomers(
   return useQuery({
     queryKey: ['customers', 'at-risk', limit],
     queryFn: () => customerApi.getAtRisk(limit),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -173,10 +184,12 @@ export function useAtRiskCustomers(
 export function usePipeline(
   options?: Omit<UseQueryOptions<PipelineStage[]>, 'queryKey' | 'queryFn'>
 ) {
+  const { filters } = useFilters();
+
   return useQuery({
-    queryKey: ['operations', 'pipeline'],
-    queryFn: () => operationsApi.getPipeline(),
-    staleTime: 5 * 60 * 1000,
+    queryKey: ['operations', 'pipeline', filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => operationsApi.getPipeline(filters.dateRange),
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -185,10 +198,26 @@ export function usePipeline(
 export function useSalesPerformance(
   options?: Omit<UseQueryOptions<SalesRep[]>, 'queryKey' | 'queryFn'>
 ) {
+  const { filters } = useFilters();
+
   return useQuery({
-    queryKey: ['operations', 'sales-performance'],
-    queryFn: () => operationsApi.getSalesPerformance(),
-    staleTime: 5 * 60 * 1000,
+    queryKey: ['operations', 'sales-performance', filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => operationsApi.getSalesPerformance(filters.dateRange),
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
+export function useCycleTime(
+  options?: Omit<UseQueryOptions<{ stage: string; avgDays: number }[]>, 'queryKey' | 'queryFn'>
+) {
+  const { filters } = useFilters();
+
+  return useQuery({
+    queryKey: ['operations', 'cycle-time', filters.dateRange.startDate],
+    queryFn: () => operationsApi.getCycleTime(filters.dateRange),
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -199,10 +228,12 @@ export function useRevenueForecast(
   periods = 6,
   options?: Omit<UseQueryOptions<ForecastDataPoint[]>, 'queryKey' | 'queryFn'>
 ) {
+  const { filters } = useFilters();
+
   return useQuery({
-    queryKey: ['forecasting', 'revenue', periods],
-    queryFn: () => forecastingApi.getRevenueForecast(periods),
-    staleTime: 10 * 60 * 1000,
+    queryKey: ['forecasting', 'revenue', periods, filters.dateRange.startDate],
+    queryFn: () => forecastingApi.getRevenueForecast(periods, filters.dateRange),
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -212,10 +243,12 @@ export function useChurnRisk(
   limit = 10,
   options?: Omit<UseQueryOptions<ChurnRiskCustomer[]>, 'queryKey' | 'queryFn'>
 ) {
+  const { filters } = useFilters();
+
   return useQuery({
-    queryKey: ['forecasting', 'churn-risk', limit],
-    queryFn: () => forecastingApi.getChurnRisk(limit),
-    staleTime: 5 * 60 * 1000,
+    queryKey: ['forecasting', 'churn-risk', limit, filters.dateRange.startDate],
+    queryFn: () => forecastingApi.getChurnRisk(limit, filters.dateRange),
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });

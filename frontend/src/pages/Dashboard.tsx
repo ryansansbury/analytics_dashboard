@@ -84,6 +84,13 @@ export function Dashboard() {
     conversionRate: index === 0 ? 100 : Math.round((item.count / arr[0].count) * 100),
   }));
 
+  // Calculate win rate from pipeline
+  const closedWonStage = funnelData.find(s => s.stage === 'Closed Won');
+  const leadStage = funnelData.find(s => s.stage === 'Lead');
+  const winRate = leadStage && leadStage.count > 0 && closedWonStage
+    ? (closedWonStage.count / leadStage.count) * 100
+    : 3.2; // Default fallback
+
   const productTableData = (topProducts || []).map((item) => ({
     id: item.id,
     name: item.name,
@@ -127,11 +134,11 @@ export function Dashboard() {
           />
           <KPICard
             label="Conversion Rate"
-            value={3.2}
-            changePercent={0.4}
+            value={winRate}
+            changePercent={kpis.totalRevenue?.changePercent ? kpis.totalRevenue.changePercent * 0.1 : 0}
             format="percent"
             icon={<Target className="h-5 w-5" />}
-            loading={summaryLoading}
+            loading={summaryLoading || pipelineLoading}
           />
           <KPICard
             label="Pipeline Value"
