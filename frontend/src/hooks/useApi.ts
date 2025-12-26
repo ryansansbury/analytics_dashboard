@@ -223,6 +223,32 @@ export function useCycleTime(
   });
 }
 
+export function usePipelineKpis(
+  options?: Omit<
+    UseQueryOptions<{
+      pipelineValue: number;
+      pipelineChange: number;
+      avgCycleTime: number;
+      cycleTimeChange: number;
+      winRate: number;
+      winRateChange: number;
+      avgDealSize: number;
+      dealSizeChange: number;
+    }>,
+    'queryKey' | 'queryFn'
+  >
+) {
+  const { filters } = useFilters();
+
+  return useQuery({
+    queryKey: ['operations', 'pipeline-kpis', filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => operationsApi.getPipelineKpis(filters.dateRange),
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
 // Forecasting hooks
 export function useRevenueForecast(
   periods = 6,
@@ -248,6 +274,45 @@ export function useChurnRisk(
   return useQuery({
     queryKey: ['forecasting', 'churn-risk', limit, filters.dateRange.startDate],
     queryFn: () => forecastingApi.getChurnRisk(limit, filters.dateRange),
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
+export function useSeasonality(
+  options?: Omit<UseQueryOptions<{ month: string; index: number; trend: number }[]>, 'queryKey' | 'queryFn'>
+) {
+  const { filters } = useFilters();
+
+  return useQuery({
+    queryKey: ['forecasting', 'seasonality', filters.dateRange.startDate],
+    queryFn: () => forecastingApi.getSeasonality(filters.dateRange),
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
+export function useForecastingKpis(
+  options?: Omit<
+    UseQueryOptions<{
+      predictedRevenue: number;
+      predictedChange: number;
+      atRiskCount: number;
+      atRiskChange: number;
+      modelAccuracy: number;
+      accuracyChange: number;
+      forecastPeriod: number;
+    }>,
+    'queryKey' | 'queryFn'
+  >
+) {
+  const { filters } = useFilters();
+
+  return useQuery({
+    queryKey: ['forecasting', 'kpis', filters.dateRange.startDate],
+    queryFn: () => forecastingApi.getKpis(filters.dateRange),
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,

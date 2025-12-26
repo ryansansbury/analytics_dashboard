@@ -6,7 +6,7 @@ import { AreaChart } from '../components/charts/AreaChart';
 import { BarChart } from '../components/charts/BarChart';
 import { DataTable } from '../components/tables/DataTable';
 import { formatCurrency, CHART_COLORS } from '../utils/formatters';
-import { useRevenueForecast, useChurnRisk } from '../hooks/useApi';
+import { useRevenueForecast, useChurnRisk, useSeasonality, useForecastingKpis } from '../hooks/useApi';
 import { useFilters } from '../hooks/useFilters';
 
 export function Forecasting() {
@@ -15,6 +15,8 @@ export function Forecasting() {
   // Fetch real data from API
   const { data: revenueForecast, isLoading: forecastLoading } = useRevenueForecast(6);
   const { data: churnRiskData, isLoading: churnLoading } = useChurnRisk(10);
+  const { data: seasonalityData, isLoading: seasonalityLoading } = useSeasonality();
+  const { data: kpis, isLoading: kpisLoading } = useForecastingKpis();
 
   // Transform forecast data
   const forecastData = (revenueForecast || []).map(item => ({
@@ -22,10 +24,6 @@ export function Forecasting() {
     actual: item.actual,
     predicted: item.predicted,
   }));
-
-  // Calculate KPIs from forecast data
-  const predictedPeriods = (revenueForecast || []).filter(d => d.predicted && !d.actual);
-  const totalPredictedRevenue = predictedPeriods.reduce((sum, d) => sum + (d.predicted || 0), 0);
 
   // Transform churn risk data
   const churnData = (churnRiskData || []).map(customer => ({
@@ -48,8 +46,8 @@ export function Forecasting() {
     { metric: 'Confidence Interval', value: '95%' },
   ];
 
-  // Seasonality based on actual patterns in data
-  const seasonalityData = [
+  // Use seasonality from API or fallback
+  const seasonalData = seasonalityData || [
     { month: 'Jan', index: 0.92 },
     { month: 'Feb', index: 0.88 },
     { month: 'Mar', index: 0.95 },
@@ -76,30 +74,31 @@ export function Forecasting() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KPICard
             label="Predicted Revenue (6mo)"
-            value={totalPredictedRevenue}
-            changePercent={0}
+            value={kpis?.predictedRevenue || 0}
+            changePercent={kpis?.predictedChange || 0}
             format="currency"
             icon={<TrendingUp className="h-5 w-5" />}
-            loading={forecastLoading}
+            loading={kpisLoading}
           />
           <KPICard
             label="At-Risk Customers"
-            value={churnData.length}
-            changePercent={0}
+            value={kpis?.atRiskCount || churnData.length}
+            changePercent={kpis?.atRiskChange || 0}
             format="number"
             icon={<AlertCircle className="h-5 w-5" />}
-            loading={churnLoading}
+            loading={kpisLoading || churnLoading}
           />
           <KPICard
             label="Model Accuracy"
-            value={94.2}
-            changePercent={0}
+            value={kpis?.modelAccuracy || 94.2}
+            changePercent={kpis?.accuracyChange || 0}
             format="percent"
             icon={<BarChart3 className="h-5 w-5" />}
+            loading={kpisLoading}
           />
           <KPICard
             label="Forecast Period"
-            value={6}
+            value={kpis?.forecastPeriod || 6}
             changePercent={0}
             format="number"
             icon={<Calendar className="h-5 w-5" />}
@@ -137,9 +136,10 @@ export function Forecasting() {
         <ChartCard
           title="Seasonal Revenue Index"
           subtitle="Historical revenue seasonality pattern (1.0 = average)"
+          loading={seasonalityLoading}
         >
           <BarChart
-            data={seasonalityData}
+            data={seasonalData}
             xKey="month"
             yKeys={['index']}
             labels={{ index: 'Seasonal Index' }}

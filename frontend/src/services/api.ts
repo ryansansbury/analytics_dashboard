@@ -169,6 +169,23 @@ export const operationsApi = {
       })}`
     ),
 
+  getPipelineKpis: (dateRange: DateRange) =>
+    fetchApi<{
+      pipelineValue: number;
+      pipelineChange: number;
+      avgCycleTime: number;
+      cycleTimeChange: number;
+      winRate: number;
+      winRateChange: number;
+      avgDealSize: number;
+      dealSizeChange: number;
+    }>(
+      `/operations/pipeline-kpis${buildQueryString({
+        start_date: dateRange.startDate,
+        end_date: dateRange.endDate,
+      })}`
+    ),
+
   getSalesPerformance: (dateRange: DateRange) =>
     fetchApi<SalesRep[]>(
       `/operations/sales-performance${buildQueryString({
@@ -220,9 +237,26 @@ export const forecastingApi = {
       })}`
     ),
 
-  getSeasonality: () =>
+  getSeasonality: (dateRange?: DateRange) =>
     fetchApi<{ month: string; index: number; trend: number }[]>(
-      '/forecasting/seasonality'
+      `/forecasting/seasonality${buildQueryString({
+        start_date: dateRange?.startDate,
+      })}`
+    ),
+
+  getKpis: (dateRange?: DateRange) =>
+    fetchApi<{
+      predictedRevenue: number;
+      predictedChange: number;
+      atRiskCount: number;
+      atRiskChange: number;
+      modelAccuracy: number;
+      accuracyChange: number;
+      forecastPeriod: number;
+    }>(
+      `/forecasting/kpis${buildQueryString({
+        start_date: dateRange?.startDate,
+      })}`
     ),
 };
 

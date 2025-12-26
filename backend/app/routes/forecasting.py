@@ -165,6 +165,41 @@ def get_churn_risk():
     return churn_data
 
 
+@bp.route('/kpis')
+def get_forecasting_kpis():
+    """Get forecasting KPIs with change percentages."""
+    start_date = request.args.get('start_date')
+
+    # Seed for consistent but varying results per date
+    if start_date:
+        random.seed(hash(start_date) % 10000 + 300)
+    else:
+        random.seed(42)
+
+    # Calculate predicted revenue (varies by date)
+    base_predicted = 4500000
+    predicted_revenue = base_predicted * random.uniform(0.85, 1.15)
+    predicted_change = random.uniform(5.0, 18.0)
+
+    # At-risk customers count (varies slightly)
+    at_risk_count = 8 + random.randint(-2, 4)
+    at_risk_change = random.uniform(-12.0, 8.0)
+
+    # Model accuracy (varies slightly)
+    model_accuracy = 92.0 + random.uniform(0, 4.0)
+    accuracy_change = random.uniform(-1.0, 2.0)
+
+    return {
+        'predictedRevenue': round(predicted_revenue, 2),
+        'predictedChange': round(predicted_change, 1),
+        'atRiskCount': at_risk_count,
+        'atRiskChange': round(at_risk_change, 1),
+        'modelAccuracy': round(model_accuracy, 1),
+        'accuracyChange': round(accuracy_change, 1),
+        'forecastPeriod': 6,
+    }
+
+
 @bp.route('/seasonality')
 def get_seasonality():
     """Get seasonal revenue patterns."""

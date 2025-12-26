@@ -6,13 +6,14 @@ import { BarChart } from '../components/charts/BarChart';
 import { FunnelChart } from '../components/charts/FunnelChart';
 import { DataTable } from '../components/tables/DataTable';
 import { formatCurrency } from '../utils/formatters';
-import { usePipeline, useSalesPerformance, useCycleTime } from '../hooks/useApi';
+import { usePipeline, useSalesPerformance, useCycleTime, usePipelineKpis } from '../hooks/useApi';
 import { useFilters } from '../hooks/useFilters';
 
 export function Operations() {
   const { filters } = useFilters();
   // Fetch real data from API
   const { data: pipelineData, isLoading: pipelineLoading } = usePipeline();
+  const { data: pipelineKpis, isLoading: kpisLoading } = usePipelineKpis();
   const { data: salesReps, isLoading: salesLoading } = useSalesPerformance();
   const { data: cycleTimeData } = useCycleTime();
 
@@ -23,16 +24,6 @@ export function Operations() {
     count: item.count,
     conversionRate: index === 0 ? 100 : Math.round((item.count / arr[0].count) * 100),
   }));
-
-  // Calculate KPIs from real data
-  const totalPipelineValue = funnelData.reduce((sum, item) => sum + item.value, 0);
-  const totalDeals = funnelData.reduce((sum, item) => sum + item.count, 0);
-  const avgDealSize = totalDeals > 0 ? totalPipelineValue / totalDeals : 0;
-  const closedWonStage = funnelData.find(s => s.stage === 'Closed Won');
-  const leadStage = funnelData.find(s => s.stage === 'Lead');
-  const winRate = leadStage && leadStage.count > 0 && closedWonStage
-    ? (closedWonStage.count / leadStage.count) * 100
-    : 0;
 
   // Calculate conversion rates from pipeline
   const conversionRates = [];
@@ -53,7 +44,6 @@ export function Operations() {
     { stage: 'Proposal to Negotiation', avgDays: 15 },
     { stage: 'Negotiation to Close', avgDays: 7 },
   ];
-  const totalCycleTime = cycleData.reduce((sum, item) => sum + item.avgDays, 0);
 
   // Transform sales reps data (take top 10)
   const salesRepsData = (salesReps || []).slice(0, 10).map(rep => ({
@@ -79,34 +69,35 @@ export function Operations() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KPICard
             label="Pipeline Value"
-            value={totalPipelineValue}
-            changePercent={0}
+            value={pipelineKpis?.pipelineValue || 0}
+            changePercent={pipelineKpis?.pipelineChange || 0}
             format="currency"
             icon={<TrendingUp className="h-5 w-5" />}
-            loading={pipelineLoading}
+            loading={kpisLoading}
           />
           <KPICard
             label="Avg Cycle Time"
-            value={totalCycleTime}
-            changePercent={0}
+            value={pipelineKpis?.avgCycleTime || 42}
+            changePercent={pipelineKpis?.cycleTimeChange || 0}
             format="number"
             icon={<Clock className="h-5 w-5" />}
+            loading={kpisLoading}
           />
           <KPICard
             label="Win Rate"
-            value={winRate}
-            changePercent={0}
+            value={pipelineKpis?.winRate || 0}
+            changePercent={pipelineKpis?.winRateChange || 0}
             format="percent"
             icon={<Trophy className="h-5 w-5" />}
-            loading={pipelineLoading}
+            loading={kpisLoading}
           />
           <KPICard
             label="Avg Deal Size"
-            value={avgDealSize}
-            changePercent={0}
+            value={pipelineKpis?.avgDealSize || 0}
+            changePercent={pipelineKpis?.dealSizeChange || 0}
             format="currency"
             icon={<Target className="h-5 w-5" />}
-            loading={pipelineLoading}
+            loading={kpisLoading}
           />
         </div>
 
