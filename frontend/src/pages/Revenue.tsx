@@ -4,77 +4,108 @@ import { AreaChart } from '../components/charts/AreaChart';
 import { BarChart } from '../components/charts/BarChart';
 import { DonutChart } from '../components/charts/PieChart';
 import { DataTable } from '../components/tables/DataTable';
-import { formatCurrency, formatPercent, CHART_COLORS } from '../utils/formatters';
+import { formatCurrency, CHART_COLORS } from '../utils/formatters';
+import {
+  useRevenueTrends,
+  useRevenueByCategory,
+  useRevenueByRegion,
+  useRevenueByChannel,
+  useTopProducts,
+} from '../hooks/useApi';
+import { useFilters } from '../hooks/useFilters';
 
-// Mock data
-const mockRevenueTrend = [
-  { date: '2024-01', revenue: 320000, previousYear: 280000 },
-  { date: '2024-02', revenue: 345000, previousYear: 295000 },
-  { date: '2024-03', revenue: 380000, previousYear: 320000 },
-  { date: '2024-04', revenue: 355000, previousYear: 310000 },
-  { date: '2024-05', revenue: 410000, previousYear: 340000 },
-  { date: '2024-06', revenue: 445000, previousYear: 360000 },
-  { date: '2024-07', revenue: 420000, previousYear: 375000 },
-  { date: '2024-08', revenue: 480000, previousYear: 390000 },
-  { date: '2024-09', revenue: 520000, previousYear: 420000 },
-  { date: '2024-10', revenue: 495000, previousYear: 435000 },
-  { date: '2024-11', revenue: 550000, previousYear: 460000 },
-  { date: '2024-12', revenue: 530000, previousYear: 480000 },
-];
+// Determine appropriate granularity based on date range
+function getGranularity(preset?: string): 'day' | 'week' | 'month' {
+  switch (preset) {
+    case 'last7d':
+    case 'last30d':
+      return 'day';
+    case 'last90d':
+      return 'week';
+    case 'ytd':
+    case 'lastYear':
+    default:
+      return 'month';
+  }
+}
 
-const mockCategoryData = [
-  { category: 'Enterprise Software', value: 1850000 },
-  { category: 'Professional Services', value: 980000 },
-  { category: 'Cloud Infrastructure', value: 720000 },
-  { category: 'Data Analytics', value: 450000 },
-  { category: 'Security Solutions', value: 250000 },
-];
-
-const mockRegionData = [
-  { region: 'North America', revenue: 2100000, growth: 15.2 },
-  { region: 'Europe', revenue: 1250000, growth: 12.8 },
-  { region: 'Asia Pacific', revenue: 620000, growth: 28.5 },
-  { region: 'Latin America', revenue: 180000, growth: 8.3 },
-  { region: 'Middle East', revenue: 100000, growth: 22.1 },
-];
-
-const mockChannelData = [
-  { channel: 'Direct Sales', value: 2800000 },
-  { channel: 'Online', value: 850000 },
-  { channel: 'Partners', value: 600000 },
-];
-
-const mockTopProducts = [
-  { id: 1, name: 'Enterprise Suite Pro', category: 'Software', revenue: 1250000, units: 45, avgPrice: 27778, growth: 15.2 },
-  { id: 2, name: 'Cloud Platform Standard', category: 'Cloud', revenue: 890000, units: 120, avgPrice: 7417, growth: 22.8 },
-  { id: 3, name: 'Analytics Dashboard', category: 'Analytics', revenue: 650000, units: 85, avgPrice: 7647, growth: 18.5 },
-  { id: 4, name: 'Security Gateway', category: 'Security', revenue: 420000, units: 62, avgPrice: 6774, growth: -3.2 },
-  { id: 5, name: 'API Integration Kit', category: 'Integration', revenue: 380000, units: 210, avgPrice: 1810, growth: 45.1 },
-  { id: 6, name: 'Data Warehouse Solution', category: 'Analytics', revenue: 340000, units: 28, avgPrice: 12143, growth: 12.4 },
-  { id: 7, name: 'Mobile SDK', category: 'Development', revenue: 280000, units: 340, avgPrice: 824, growth: 35.6 },
-  { id: 8, name: 'Compliance Manager', category: 'Security', revenue: 220000, units: 44, avgPrice: 5000, growth: 8.9 },
-];
+// Get proper adjective form for granularity
+function getGranularityLabel(granularity: 'day' | 'week' | 'month'): string {
+  switch (granularity) {
+    case 'day':
+      return 'Daily';
+    case 'week':
+      return 'Weekly';
+    case 'month':
+      return 'Monthly';
+  }
+}
 
 export function Revenue() {
+  const { filters } = useFilters();
+
+  // Determine granularity based on date range
+  const granularity = getGranularity(filters.dateRange.preset);
+
+  // Fetch data from API
+  const { data: revenueTrends, isLoading: trendsLoading } = useRevenueTrends(granularity);
+  const { data: categoryData, isLoading: categoryLoading } = useRevenueByCategory();
+  const { data: regionData, isLoading: regionLoading } = useRevenueByRegion();
+  const { data: channelData, isLoading: channelLoading } = useRevenueByChannel();
+  const { data: topProducts, isLoading: productsLoading } = useTopProducts(8);
+
+  // Transform data for charts
+  const trendData = (revenueTrends || []).map(item => ({
+    date: item.date,
+    revenue: item.revenue,
+    orders: item.orders,
+  }));
+
+  const chartCategoryData = (categoryData || []).map(item => ({
+    category: item.category,
+    value: item.value,
+  }));
+
+  const chartRegionData = (regionData || []).map(item => ({
+    region: item.region,
+    revenue: item.revenue,
+    growth: item.growth,
+  }));
+
+  const chartChannelData = (channelData || []).map(item => ({
+    channel: item.channel,
+    value: item.value,
+  }));
+
+  const productTableData = (topProducts || []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    revenue: item.revenue,
+    units: item.unitsSold,
+    avgPrice: item.avgPrice,
+  }));
+
   return (
     <div className="min-h-screen">
       <Header
         title="Revenue Analytics"
-        subtitle="Detailed analysis of revenue performance across all dimensions"
+        subtitle={`Data from ${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
       />
 
       <div className="p-6 space-y-6">
-        {/* Revenue Trend with YoY Comparison */}
+        {/* Revenue Trend */}
         <ChartCard
           title="Revenue Over Time"
-          subtitle="Current year vs previous year comparison"
+          subtitle={`${getGranularityLabel(granularity)} revenue trend`}
+          loading={trendsLoading}
         >
           <AreaChart
-            data={mockRevenueTrend}
+            data={trendData}
             xKey="date"
-            yKeys={['revenue', 'previousYear']}
-            labels={{ revenue: 'Current Year', previousYear: 'Previous Year' }}
-            colors={[CHART_COLORS[0], CHART_COLORS[3]]}
+            yKeys={['revenue']}
+            labels={{ revenue: 'Revenue' }}
+            colors={[CHART_COLORS[0]]}
             height={350}
             showLegend
           />
@@ -82,9 +113,13 @@ export function Revenue() {
 
         {/* Category and Region */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartCard title="Revenue by Category" subtitle="Product category breakdown">
+          <ChartCard
+            title="Revenue by Category"
+            subtitle="Product category breakdown"
+            loading={categoryLoading}
+          >
             <BarChart
-              data={mockCategoryData}
+              data={chartCategoryData}
               xKey="category"
               yKeys={['value']}
               height={300}
@@ -92,9 +127,13 @@ export function Revenue() {
             />
           </ChartCard>
 
-          <ChartCard title="Revenue by Region" subtitle="Geographic distribution">
+          <ChartCard
+            title="Revenue by Region"
+            subtitle="Geographic distribution"
+            loading={regionLoading}
+          >
             <BarChart
-              data={mockRegionData}
+              data={chartRegionData}
               xKey="region"
               yKeys={['revenue']}
               height={300}
@@ -106,9 +145,13 @@ export function Revenue() {
 
         {/* Channel Distribution */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <ChartCard title="Revenue by Channel" subtitle="Sales channel breakdown">
+          <ChartCard
+            title="Revenue by Channel"
+            subtitle="Sales channel breakdown"
+            loading={channelLoading}
+          >
             <DonutChart
-              data={mockChannelData}
+              data={chartChannelData}
               nameKey="channel"
               valueKey="value"
               height={280}
@@ -119,9 +162,10 @@ export function Revenue() {
             title="Top Products"
             subtitle="Best performing products"
             className="lg:col-span-2"
+            loading={productsLoading}
           >
             <DataTable
-              data={mockTopProducts}
+              data={productTableData}
               keyExtractor={(row) => row.id}
               columns={[
                 { key: 'name', header: 'Product', sortable: true },
@@ -146,17 +190,6 @@ export function Revenue() {
                   sortable: true,
                   align: 'right',
                   render: (value) => formatCurrency(value as number),
-                },
-                {
-                  key: 'growth',
-                  header: 'Growth',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => {
-                    const v = value as number;
-                    const color = v >= 0 ? 'text-success' : 'text-danger';
-                    return <span className={color}>{formatPercent(v)}</span>;
-                  },
                 },
               ]}
             />

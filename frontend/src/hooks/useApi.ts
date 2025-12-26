@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { useFilters } from './useFilters';
 import {
@@ -12,6 +12,7 @@ import type {
   DashboardSummary,
   RevenueTrend,
   CategoryData,
+  ChannelData,
   RegionData,
   Product,
   CustomerSegment,
@@ -32,7 +33,8 @@ export function useDashboardSummary(
   return useQuery({
     queryKey: ['dashboard', 'summary', filters.dateRange],
     queryFn: () => dashboardApi.getSummary(filters.dateRange),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -48,6 +50,7 @@ export function useRevenueTrends(
     queryKey: ['revenue', 'trends', filters.dateRange, granularity],
     queryFn: () => revenueApi.getTrends(filters.dateRange, granularity),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -61,6 +64,7 @@ export function useRevenueByCategory(
     queryKey: ['revenue', 'by-category', filters.dateRange],
     queryFn: () => revenueApi.getByCategory(filters.dateRange),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -74,12 +78,13 @@ export function useRevenueByRegion(
     queryKey: ['revenue', 'by-region', filters.dateRange],
     queryFn: () => revenueApi.getByRegion(filters.dateRange),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
 
 export function useRevenueByChannel(
-  options?: Omit<UseQueryOptions<CategoryData[]>, 'queryKey' | 'queryFn'>
+  options?: Omit<UseQueryOptions<ChannelData[]>, 'queryKey' | 'queryFn'>
 ) {
   const { filters } = useFilters();
 
@@ -87,6 +92,7 @@ export function useRevenueByChannel(
     queryKey: ['revenue', 'by-channel', filters.dateRange],
     queryFn: () => revenueApi.getByChannel(filters.dateRange),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -101,6 +107,7 @@ export function useTopProducts(
     queryKey: ['revenue', 'top-products', filters.dateRange, limit],
     queryFn: () => revenueApi.getTopProducts(filters.dateRange, limit),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -118,6 +125,7 @@ export function useCustomerOverview(
     queryKey: ['customers', 'overview', filters.dateRange],
     queryFn: () => customerApi.getOverview(filters.dateRange),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -131,6 +139,7 @@ export function useCustomerSegments(
     queryKey: ['customers', 'segments', filters.dateRange],
     queryFn: () => customerApi.getSegments(filters.dateRange),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -142,6 +151,7 @@ export function useCustomerCohorts(
     queryKey: ['customers', 'cohorts'],
     queryFn: () => customerApi.getCohorts(),
     staleTime: 10 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -154,6 +164,7 @@ export function useAtRiskCustomers(
     queryKey: ['customers', 'at-risk', limit],
     queryFn: () => customerApi.getAtRisk(limit),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -166,6 +177,7 @@ export function usePipeline(
     queryKey: ['operations', 'pipeline'],
     queryFn: () => operationsApi.getPipeline(),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -177,6 +189,7 @@ export function useSalesPerformance(
     queryKey: ['operations', 'sales-performance'],
     queryFn: () => operationsApi.getSalesPerformance(),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -190,6 +203,7 @@ export function useRevenueForecast(
     queryKey: ['forecasting', 'revenue', periods],
     queryFn: () => forecastingApi.getRevenueForecast(periods),
     staleTime: 10 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }
@@ -202,6 +216,7 @@ export function useChurnRisk(
     queryKey: ['forecasting', 'churn-risk', limit],
     queryFn: () => forecastingApi.getChurnRisk(limit),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     ...options,
   });
 }

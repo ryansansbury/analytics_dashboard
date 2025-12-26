@@ -106,7 +106,7 @@ export function tooltipPercentFormatter(value: number): string {
 export const CHART_COLORS = [
   '#6366F1', // Indigo
   '#8B5CF6', // Purple
-  '#EC4899', // Pink
+  '#06B6D4', // Cyan
   '#F59E0B', // Amber
   '#10B981', // Emerald
   '#3B82F6', // Blue

@@ -6,57 +6,64 @@ import { BarChart } from '../components/charts/BarChart';
 import { FunnelChart } from '../components/charts/FunnelChart';
 import { DataTable } from '../components/tables/DataTable';
 import { formatCurrency } from '../utils/formatters';
-
-// Mock data
-const mockOperationsKPIs = {
-  pipelineValue: { value: 8500000, change: 15.2 },
-  avgCycleTime: { value: 42, change: -8.5 },
-  winRate: { value: 28.5, change: 3.2 },
-  avgDealSize: { value: 125000, change: 12.1 },
-};
-
-const mockPipelineData = [
-  { stage: 'Lead', value: 8500000, count: 245, conversionRate: 100 },
-  { stage: 'Qualified', value: 5200000, count: 156, conversionRate: 63.7 },
-  { stage: 'Proposal', value: 3100000, count: 89, conversionRate: 57.1 },
-  { stage: 'Negotiation', value: 1800000, count: 42, conversionRate: 47.2 },
-  { stage: 'Closed Won', value: 950000, count: 28, conversionRate: 66.7 },
-];
-
-const mockSalesReps = [
-  { id: 1, name: 'Sarah Johnson', team: 'Enterprise', region: 'West', quota: 500000, achieved: 580000, deals: 12, attainment: 116 },
-  { id: 2, name: 'Michael Chen', team: 'Enterprise', region: 'East', quota: 500000, achieved: 520000, deals: 10, attainment: 104 },
-  { id: 3, name: 'Emily Davis', team: 'Mid-Market', region: 'Central', quota: 350000, achieved: 345000, deals: 18, attainment: 98.6 },
-  { id: 4, name: 'James Wilson', team: 'Mid-Market', region: 'West', quota: 350000, achieved: 310000, deals: 15, attainment: 88.6 },
-  { id: 5, name: 'Lisa Anderson', team: 'Enterprise', region: 'Central', quota: 500000, achieved: 425000, deals: 8, attainment: 85 },
-  { id: 6, name: 'David Brown', team: 'SMB', region: 'East', quota: 200000, achieved: 165000, deals: 32, attainment: 82.5 },
-  { id: 7, name: 'Jennifer Martinez', team: 'SMB', region: 'West', quota: 200000, achieved: 155000, deals: 28, attainment: 77.5 },
-  { id: 8, name: 'Robert Taylor', team: 'Mid-Market', region: 'East', quota: 350000, achieved: 260000, deals: 12, attainment: 74.3 },
-];
-
-const mockConversionRates = [
-  { fromStage: 'Lead → Qualified', rate: 63.7 },
-  { fromStage: 'Qualified → Proposal', rate: 57.1 },
-  { fromStage: 'Proposal → Negotiation', rate: 47.2 },
-  { fromStage: 'Negotiation → Won', rate: 66.7 },
-];
-
-const mockCycleTime = [
-  { stage: 'Lead to Qualified', avgDays: 8 },
-  { stage: 'Qualified to Proposal', avgDays: 12 },
-  { stage: 'Proposal to Negotiation', avgDays: 15 },
-  { stage: 'Negotiation to Close', avgDays: 7 },
-];
-
-const mockOpportunities = [
-  { id: 1, name: 'Enterprise Suite - Acme Corp', customer: 'Acme Corporation', amount: 450000, stage: 'Negotiation', probability: 75, closeDate: '2025-01-15', rep: 'Sarah Johnson' },
-  { id: 2, name: 'Cloud Migration - TechStart', customer: 'TechStart Inc', amount: 280000, stage: 'Proposal', probability: 50, closeDate: '2025-01-28', rep: 'Michael Chen' },
-  { id: 3, name: 'Security Upgrade - Global Sys', customer: 'Global Systems', amount: 185000, stage: 'Negotiation', probability: 80, closeDate: '2025-01-10', rep: 'Emily Davis' },
-  { id: 4, name: 'Analytics Platform - DataCo', customer: 'DataCo Analytics', amount: 320000, stage: 'Qualified', probability: 30, closeDate: '2025-02-15', rep: 'James Wilson' },
-  { id: 5, name: 'Integration Suite - CloudNet', customer: 'CloudNet Solutions', amount: 165000, stage: 'Proposal', probability: 60, closeDate: '2025-01-22', rep: 'Lisa Anderson' },
-];
+import { usePipeline, useSalesPerformance } from '../hooks/useApi';
 
 export function Operations() {
+  // Fetch real data from API
+  const { data: pipelineData, isLoading: pipelineLoading } = usePipeline();
+  const { data: salesReps, isLoading: salesLoading } = useSalesPerformance();
+
+  // Transform pipeline data for funnel
+  const funnelData = (pipelineData || []).map((item, index, arr) => ({
+    stage: item.stage,
+    value: item.value,
+    count: item.count,
+    conversionRate: index === 0 ? 100 : Math.round((item.count / arr[0].count) * 100),
+  }));
+
+  // Calculate KPIs from real data
+  const totalPipelineValue = funnelData.reduce((sum, item) => sum + item.value, 0);
+  const totalDeals = funnelData.reduce((sum, item) => sum + item.count, 0);
+  const avgDealSize = totalDeals > 0 ? totalPipelineValue / totalDeals : 0;
+  const closedWonStage = funnelData.find(s => s.stage === 'Closed Won');
+  const leadStage = funnelData.find(s => s.stage === 'Lead');
+  const winRate = leadStage && leadStage.count > 0 && closedWonStage
+    ? (closedWonStage.count / leadStage.count) * 100
+    : 0;
+
+  // Calculate conversion rates from pipeline
+  const conversionRates = [];
+  for (let i = 0; i < funnelData.length - 1; i++) {
+    const fromStage = funnelData[i];
+    const toStage = funnelData[i + 1];
+    const rate = fromStage.count > 0 ? (toStage.count / fromStage.count) * 100 : 0;
+    conversionRates.push({
+      fromStage: `${fromStage.stage} → ${toStage.stage}`,
+      rate: Math.round(rate * 10) / 10,
+    });
+  }
+
+  // Static cycle time (would need timestamp tracking to calculate dynamically)
+  const cycleTimeData = [
+    { stage: 'Lead to Qualified', avgDays: 8 },
+    { stage: 'Qualified to Proposal', avgDays: 12 },
+    { stage: 'Proposal to Negotiation', avgDays: 15 },
+    { stage: 'Negotiation to Close', avgDays: 7 },
+  ];
+  const totalCycleTime = cycleTimeData.reduce((sum, item) => sum + item.avgDays, 0);
+
+  // Transform sales reps data (take top 10)
+  const salesRepsData = (salesReps || []).slice(0, 10).map(rep => ({
+    id: rep.id,
+    name: rep.name,
+    team: rep.team,
+    region: rep.region,
+    quota: rep.quota,
+    achieved: rep.achieved,
+    deals: rep.deals,
+    attainment: rep.attainment,
+  }));
+
   return (
     <div className="min-h-screen">
       <Header
@@ -69,43 +76,46 @@ export function Operations() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KPICard
             label="Pipeline Value"
-            value={mockOperationsKPIs.pipelineValue.value}
-            changePercent={mockOperationsKPIs.pipelineValue.change}
+            value={totalPipelineValue}
+            changePercent={0}
             format="currency"
             icon={<TrendingUp className="h-5 w-5" />}
+            loading={pipelineLoading}
           />
           <KPICard
             label="Avg Cycle Time"
-            value={mockOperationsKPIs.avgCycleTime.value}
-            changePercent={mockOperationsKPIs.avgCycleTime.change}
+            value={totalCycleTime}
+            changePercent={0}
             format="number"
             icon={<Clock className="h-5 w-5" />}
           />
           <KPICard
             label="Win Rate"
-            value={mockOperationsKPIs.winRate.value}
-            changePercent={mockOperationsKPIs.winRate.change}
+            value={winRate}
+            changePercent={0}
             format="percent"
             icon={<Trophy className="h-5 w-5" />}
+            loading={pipelineLoading}
           />
           <KPICard
             label="Avg Deal Size"
-            value={mockOperationsKPIs.avgDealSize.value}
-            changePercent={mockOperationsKPIs.avgDealSize.change}
+            value={avgDealSize}
+            changePercent={0}
             format="currency"
             icon={<Target className="h-5 w-5" />}
+            loading={pipelineLoading}
           />
         </div>
 
         {/* Pipeline and Conversion */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartCard title="Sales Pipeline" subtitle="Opportunity value by stage">
-            <FunnelChart data={mockPipelineData} height={320} />
+          <ChartCard title="Sales Pipeline" subtitle="Opportunity value by stage" loading={pipelineLoading}>
+            <FunnelChart data={funnelData} height={320} />
           </ChartCard>
 
-          <ChartCard title="Stage Conversion Rates" subtitle="Conversion percentage between stages">
+          <ChartCard title="Stage Conversion Rates" subtitle="Conversion percentage between stages" loading={pipelineLoading}>
             <BarChart
-              data={mockConversionRates}
+              data={conversionRates}
               xKey="fromStage"
               yKeys={['rate']}
               formatY="percent"
@@ -119,7 +129,7 @@ export function Operations() {
         {/* Cycle Time */}
         <ChartCard title="Deal Cycle Time" subtitle="Average days spent in each stage">
           <BarChart
-            data={mockCycleTime}
+            data={cycleTimeData}
             xKey="stage"
             yKeys={['avgDays']}
             formatY="number"
@@ -130,11 +140,12 @@ export function Operations() {
 
         {/* Sales Rep Performance */}
         <ChartCard
-          title="Sales Team Performance"
-          subtitle="Individual quota attainment and deal metrics"
+          title="Sales Team Performance (YTD)"
+          subtitle="Pro-rated quota attainment and deal metrics"
+          loading={salesLoading}
         >
           <DataTable
-            data={mockSalesReps}
+            data={salesRepsData}
             keyExtractor={(row) => row.id}
             columns={[
               { key: 'name', header: 'Sales Rep', sortable: true },
@@ -142,14 +153,14 @@ export function Operations() {
               { key: 'region', header: 'Region', sortable: true },
               {
                 key: 'quota',
-                header: 'Quota',
+                header: 'Annual Quota',
                 sortable: true,
                 align: 'right',
                 render: (value) => formatCurrency(value as number, true),
               },
               {
                 key: 'achieved',
-                header: 'Achieved',
+                header: 'YTD Achieved',
                 sortable: true,
                 align: 'right',
                 render: (value) => formatCurrency(value as number, true),
@@ -171,47 +182,6 @@ export function Operations() {
                   return <span className={`font-medium ${color}`}>{v.toFixed(1)}%</span>;
                 },
               },
-            ]}
-          />
-        </ChartCard>
-
-        {/* Top Opportunities */}
-        <ChartCard
-          title="Top Opportunities"
-          subtitle="Highest value deals in the pipeline"
-        >
-          <DataTable
-            data={mockOpportunities}
-            keyExtractor={(row) => row.id}
-            columns={[
-              { key: 'name', header: 'Opportunity', sortable: true },
-              { key: 'customer', header: 'Customer', sortable: true },
-              {
-                key: 'amount',
-                header: 'Amount',
-                sortable: true,
-                align: 'right',
-                render: (value) => formatCurrency(value as number),
-              },
-              {
-                key: 'stage',
-                header: 'Stage',
-                sortable: true,
-                render: (value) => (
-                  <span className="px-2 py-1 text-xs rounded-full bg-primary-500/20 text-primary-400">
-                    {value as string}
-                  </span>
-                ),
-              },
-              {
-                key: 'probability',
-                header: 'Probability',
-                sortable: true,
-                align: 'right',
-                render: (value) => `${value}%`,
-              },
-              { key: 'closeDate', header: 'Expected Close', sortable: true },
-              { key: 'rep', header: 'Sales Rep', sortable: true },
             ]}
           />
         </ChartCard>

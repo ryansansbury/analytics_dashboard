@@ -37,7 +37,6 @@ export interface RevenueTrend {
   date: string;
   revenue: number;
   orders: number;
-  previousYearRevenue?: number;
 }
 
 // Category Data
@@ -45,7 +44,13 @@ export interface CategoryData {
   category: string;
   value: number;
   percentage: number;
-  color?: string;
+}
+
+// Channel Data
+export interface ChannelData {
+  channel: string;
+  value: number;
+  percentage: number;
 }
 
 export interface RegionData {
@@ -146,10 +151,12 @@ export interface ChurnRiskCustomer {
   id: number;
   name: string;
   company: string;
+  segment: string;
   riskScore: number;
-  lastActivity: string;
+  lastActivity?: string;
   daysSinceActivity: number;
   lifetimeValue: number;
+  recommendation: string;
 }
 
 // Dashboard Summary

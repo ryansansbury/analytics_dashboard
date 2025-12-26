@@ -138,5 +138,5 @@ export function PieChart<T extends Record<string, unknown>>({
 export function DonutChart<T extends Record<string, unknown>>(
   props: Omit<PieChartProps<T>, 'innerRadius'>
 ) {
-  return <PieChart {...props} innerRadius={60} />;
+  return <PieChart {...props} innerRadius={35} />;
 }

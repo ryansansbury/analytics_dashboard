@@ -2,6 +2,7 @@ import type {
   DashboardSummary,
   RevenueTrend,
   CategoryData,
+  ChannelData,
   RegionData,
   Product,
   Customer,
@@ -15,7 +16,7 @@ import type {
   DateRange,
 } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -89,7 +90,7 @@ export const revenueApi = {
     ),
 
   getByChannel: (dateRange: DateRange) =>
-    fetchApi<CategoryData[]>(
+    fetchApi<ChannelData[]>(
       `/revenue/by-channel${buildQueryString({
         start_date: dateRange.startDate,
         end_date: dateRange.endDate,

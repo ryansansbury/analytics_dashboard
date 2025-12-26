@@ -1,5 +1,6 @@
 from flask import Blueprint, request
 from sqlalchemy import func
+from datetime import datetime, timedelta
 from app import db
 from app.models import Pipeline, SalesRep, Transaction
 
@@ -43,8 +44,17 @@ def get_pipeline():
 
 @bp.route('/sales-performance')
 def get_sales_performance():
-    """Get sales rep performance vs quota."""
-    # Get all sales reps with their achieved revenue
+    """Get sales rep performance vs quota (YTD for proper quota comparison)."""
+    # Calculate YTD date range for proper quota comparison
+    today = datetime.now().date()
+    year_start = datetime(today.year, 1, 1).date()
+
+    # Calculate what fraction of the year has passed for pro-rated quota
+    days_in_year = 366 if today.year % 4 == 0 else 365
+    days_elapsed = (today - year_start).days + 1
+    year_fraction = days_elapsed / days_in_year
+
+    # Get all sales reps with their YTD achieved revenue
     results = db.session.query(
         SalesRep.id,
         SalesRep.name,
@@ -54,26 +64,38 @@ def get_sales_performance():
         func.sum(Transaction.amount).label('achieved'),
         func.count(Transaction.id).label('deals')
     ).outerjoin(
-        Transaction, Transaction.sales_rep_id == SalesRep.id
-    ).filter(
-        Transaction.status == 'completed'
+        Transaction,
+        (Transaction.sales_rep_id == SalesRep.id) &
+        (Transaction.transaction_date >= year_start) &
+        (Transaction.transaction_date <= today) &
+        (Transaction.status == 'completed')
     ).group_by(
         SalesRep.id, SalesRep.name, SalesRep.team, SalesRep.region, SalesRep.quota
     ).all()
 
-    return [
-        {
+    reps_data = []
+    for row in results:
+        achieved = float(row.achieved) if row.achieved else 0
+        quota = float(row.quota) if row.quota else 0
+        # Pro-rate quota based on time elapsed in year
+        prorated_quota = quota * year_fraction
+        # Calculate attainment against pro-rated quota
+        attainment = round((achieved / prorated_quota * 100), 1) if prorated_quota > 0 else 0
+
+        reps_data.append({
             'id': row.id,
             'name': row.name,
             'team': row.team,
             'region': row.region,
-            'quota': float(row.quota) if row.quota else 0,
-            'achieved': float(row.achieved) if row.achieved else 0,
+            'quota': quota,
+            'achieved': achieved,
             'deals': row.deals or 0,
-            'attainment': round((float(row.achieved) / float(row.quota) * 100), 1) if row.quota and row.achieved else 0,
-        }
-        for row in results
-    ]
+            'attainment': attainment,
+        })
+
+    # Sort by attainment descending
+    reps_data.sort(key=lambda x: x['attainment'], reverse=True)
+    return reps_data
 
 
 @bp.route('/conversion-rates')

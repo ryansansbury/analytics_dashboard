@@ -35,14 +35,17 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-64'
       )}
     >
-      {/* Logo */}
-      <div className="flex h-16 items-center justify-between px-4 border-b border-gray-800">
+      {/* Logo - matches main header height (py-4 + content) */}
+      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-800">
         {!collapsed && (
-          <span className="text-xl font-bold text-white">Analytics</span>
+          <span className="text-xl font-bold text-white leading-8">Analytics</span>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+          className={clsx(
+            'p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors',
+            collapsed && 'mx-auto'
+          )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (

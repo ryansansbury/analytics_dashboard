@@ -11,6 +11,7 @@ interface KPICardProps {
   format?: 'currency' | 'number' | 'percent';
   icon?: React.ReactNode;
   className?: string;
+  loading?: boolean;
 }
 
 export function KPICard({
@@ -22,6 +23,7 @@ export function KPICard({
   format = 'number',
   icon,
   className,
+  loading = false,
 }: KPICardProps) {
   const formattedValue = (() => {
     switch (format) {
@@ -59,6 +61,30 @@ export function KPICard({
     : trend === 'down'
       ? 'bg-danger/10'
       : 'bg-gray-800';
+
+  if (loading) {
+    return (
+      <div
+        className={clsx(
+          'bg-gray-900 rounded-xl border border-gray-800 p-6',
+          className
+        )}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div className="h-4 w-24 bg-gray-800 rounded animate-pulse" />
+          {icon && (
+            <div className="p-2 bg-gray-800 rounded-lg">
+              <div className="h-5 w-5 bg-gray-700 rounded animate-pulse" />
+            </div>
+          )}
+        </div>
+        <div className="space-y-2">
+          <div className="h-9 w-32 bg-gray-800 rounded animate-pulse" />
+          <div className="h-5 w-24 bg-gray-800 rounded animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

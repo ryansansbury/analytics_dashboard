@@ -1,0 +1,19 @@
+# Railway/Nixpacks configuration
+[phases.setup]
+nixPkgs = ["nodejs_20", "python311"]
+
+[phases.install]
+cmds = [
+    "cd frontend && npm install",
+    "cd backend && pip install -r requirements.txt"
+]
+
+[phases.build]
+cmds = [
+    "cd frontend && npm run build",
+    "rm -rf backend/static",
+    "cp -r frontend/dist backend/static"
+]
+
+[start]
+cmd = "cd backend && gunicorn run:app --bind 0.0.0.0:$PORT --workers 2"

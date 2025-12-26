@@ -7,63 +7,95 @@ import { BarChart } from '../components/charts/BarChart';
 import { DonutChart } from '../components/charts/PieChart';
 import { FunnelChart } from '../components/charts/FunnelChart';
 import { DataTable } from '../components/tables/DataTable';
-import { formatCurrency, formatPercent, CHART_COLORS } from '../utils/formatters';
+import { formatCurrency, CHART_COLORS } from '../utils/formatters';
+import {
+  useDashboardSummary,
+  useRevenueTrends,
+  useRevenueByCategory,
+  usePipeline,
+  useTopProducts,
+} from '../hooks/useApi';
+import { useFilters } from '../hooks/useFilters';
 
-// Mock data - will be replaced with API calls
-const mockKPIs = {
-  totalRevenue: { value: 4250000, change: 12.5 },
-  totalCustomers: { value: 1847, change: 8.3 },
-  avgOrderValue: { value: 2300, change: -2.1 },
-  conversionRate: { value: 3.2, change: 0.4 },
-  pipelineValue: { value: 8500000, change: 15.2 },
-  growthRate: { value: 18.5, change: 3.2 },
-};
+// Determine appropriate granularity based on date range
+function getGranularity(preset?: string): 'day' | 'week' | 'month' {
+  switch (preset) {
+    case 'last7d':
+    case 'last30d':
+      return 'day';
+    case 'last90d':
+      return 'week';
+    case 'ytd':
+    case 'lastYear':
+    default:
+      return 'month';
+  }
+}
 
-const mockRevenueTrend = [
-  { date: '2024-01', revenue: 320000, orders: 142 },
-  { date: '2024-02', revenue: 345000, orders: 156 },
-  { date: '2024-03', revenue: 380000, orders: 168 },
-  { date: '2024-04', revenue: 355000, orders: 152 },
-  { date: '2024-05', revenue: 410000, orders: 175 },
-  { date: '2024-06', revenue: 445000, orders: 192 },
-  { date: '2024-07', revenue: 420000, orders: 185 },
-  { date: '2024-08', revenue: 480000, orders: 210 },
-  { date: '2024-09', revenue: 520000, orders: 228 },
-  { date: '2024-10', revenue: 495000, orders: 215 },
-  { date: '2024-11', revenue: 550000, orders: 240 },
-  { date: '2024-12', revenue: 530000, orders: 232 },
-];
-
-const mockCategoryData = [
-  { category: 'Enterprise Software', value: 1850000, percentage: 43.5 },
-  { category: 'Professional Services', value: 980000, percentage: 23.1 },
-  { category: 'Cloud Infrastructure', value: 720000, percentage: 16.9 },
-  { category: 'Data Analytics', value: 450000, percentage: 10.6 },
-  { category: 'Security Solutions', value: 250000, percentage: 5.9 },
-];
-
-const mockPipelineData = [
-  { stage: 'Lead', value: 8500000, count: 245, conversionRate: 100 },
-  { stage: 'Qualified', value: 5200000, count: 156, conversionRate: 63.7 },
-  { stage: 'Proposal', value: 3100000, count: 89, conversionRate: 57.1 },
-  { stage: 'Negotiation', value: 1800000, count: 42, conversionRate: 47.2 },
-  { stage: 'Closed Won', value: 950000, count: 28, conversionRate: 66.7 },
-];
-
-const mockTopProducts = [
-  { id: 1, name: 'Enterprise Suite Pro', revenue: 1250000, units: 45, growth: 15.2 },
-  { id: 2, name: 'Cloud Platform Standard', revenue: 890000, units: 120, growth: 22.8 },
-  { id: 3, name: 'Analytics Dashboard', revenue: 650000, units: 85, growth: 18.5 },
-  { id: 4, name: 'Security Gateway', revenue: 420000, units: 62, growth: -3.2 },
-  { id: 5, name: 'API Integration Kit', revenue: 380000, units: 210, growth: 45.1 },
-];
+// Get proper adjective form for granularity
+function getGranularityLabel(granularity: 'day' | 'week' | 'month'): string {
+  switch (granularity) {
+    case 'day':
+      return 'Daily';
+    case 'week':
+      return 'Weekly';
+    case 'month':
+      return 'Monthly';
+  }
+}
 
 export function Dashboard() {
+  const { filters } = useFilters();
+
+  // Determine granularity based on date range
+  const granularity = getGranularity(filters.dateRange.preset);
+
+  // Fetch data from API
+  const { data: summaryData, isLoading: summaryLoading } = useDashboardSummary();
+  const { data: revenueTrends, isLoading: trendsLoading } = useRevenueTrends(granularity);
+  const { data: categoryData, isLoading: categoryLoading } = useRevenueByCategory();
+  const { data: pipelineData, isLoading: pipelineLoading } = usePipeline();
+  const { data: topProducts, isLoading: productsLoading } = useTopProducts(5);
+
+  // Transform data for charts
+  const kpis = summaryData?.kpis || {
+    totalRevenue: { value: 0, changePercent: 0 },
+    totalCustomers: { value: 0, changePercent: 0 },
+    avgOrderValue: { value: 0, changePercent: 0 },
+    pipelineValue: { value: 0, changePercent: 0 },
+  };
+
+  const trendData = (revenueTrends || []).map(item => ({
+    date: item.date,
+    revenue: item.revenue,
+    orders: item.orders,
+  }));
+
+  const chartCategoryData = (categoryData || []).map(item => ({
+    category: item.category,
+    value: item.value,
+    percentage: item.percentage,
+  }));
+
+  const funnelData = (pipelineData || []).map((item, index, arr) => ({
+    stage: item.stage,
+    value: item.value,
+    count: item.count,
+    conversionRate: index === 0 ? 100 : Math.round((item.count / arr[0].count) * 100),
+  }));
+
+  const productTableData = (topProducts || []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    revenue: item.revenue,
+    units: item.unitsSold,
+  }));
+
   return (
     <div className="min-h-screen">
       <Header
         title="Executive Dashboard"
-        subtitle="Overview of key business metrics and performance indicators"
+        subtitle={`Data from ${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
       />
 
       <div className="p-6 space-y-6">
@@ -71,45 +103,51 @@ export function Dashboard() {
         <KPIGrid>
           <KPICard
             label="Total Revenue"
-            value={mockKPIs.totalRevenue.value}
-            changePercent={mockKPIs.totalRevenue.change}
+            value={kpis.totalRevenue?.value || 0}
+            changePercent={kpis.totalRevenue?.changePercent || 0}
             format="currency"
             icon={<DollarSign className="h-5 w-5" />}
+            loading={summaryLoading}
           />
           <KPICard
             label="Total Customers"
-            value={mockKPIs.totalCustomers.value}
-            changePercent={mockKPIs.totalCustomers.change}
+            value={kpis.totalCustomers?.value || 0}
+            changePercent={kpis.totalCustomers?.changePercent || 0}
             format="number"
             icon={<Users className="h-5 w-5" />}
+            loading={summaryLoading}
           />
           <KPICard
             label="Avg Order Value"
-            value={mockKPIs.avgOrderValue.value}
-            changePercent={mockKPIs.avgOrderValue.change}
+            value={kpis.avgOrderValue?.value || 0}
+            changePercent={kpis.avgOrderValue?.changePercent || 0}
             format="currency"
             icon={<ShoppingCart className="h-5 w-5" />}
+            loading={summaryLoading}
           />
           <KPICard
             label="Conversion Rate"
-            value={mockKPIs.conversionRate.value}
-            changePercent={mockKPIs.conversionRate.change}
+            value={3.2}
+            changePercent={0.4}
             format="percent"
             icon={<Target className="h-5 w-5" />}
+            loading={summaryLoading}
           />
           <KPICard
             label="Pipeline Value"
-            value={mockKPIs.pipelineValue.value}
-            changePercent={mockKPIs.pipelineValue.change}
+            value={kpis.pipelineValue?.value || 0}
+            changePercent={kpis.pipelineValue?.changePercent || 0}
             format="currency"
             icon={<TrendingUp className="h-5 w-5" />}
+            loading={summaryLoading}
           />
           <KPICard
             label="Growth Rate"
-            value={mockKPIs.growthRate.value}
-            changePercent={mockKPIs.growthRate.change}
+            value={kpis.totalRevenue?.changePercent || 0}
+            changePercent={0}
             format="percent"
             icon={<Activity className="h-5 w-5" />}
+            loading={summaryLoading}
           />
         </KPIGrid>
 
@@ -117,11 +155,12 @@ export function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <ChartCard
             title="Revenue Trend"
-            subtitle="Monthly revenue over the past 12 months"
+            subtitle={`${getGranularityLabel(granularity)} revenue over the selected period`}
             className="lg:col-span-2"
+            loading={trendsLoading}
           >
             <AreaChart
-              data={mockRevenueTrend}
+              data={trendData}
               xKey="date"
               yKeys={['revenue']}
               labels={{ revenue: 'Revenue' }}
@@ -129,9 +168,13 @@ export function Dashboard() {
             />
           </ChartCard>
 
-          <ChartCard title="Revenue by Category" subtitle="Distribution by product category">
+          <ChartCard
+            title="Revenue by Category"
+            subtitle="Distribution by product category"
+            loading={categoryLoading}
+          >
             <DonutChart
-              data={mockCategoryData}
+              data={chartCategoryData}
               nameKey="category"
               valueKey="value"
               height={320}
@@ -142,13 +185,21 @@ export function Dashboard() {
 
         {/* Charts Row 2 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartCard title="Sales Pipeline" subtitle="Opportunity value by stage">
-            <FunnelChart data={mockPipelineData} height={320} />
+          <ChartCard
+            title="Sales Pipeline"
+            subtitle="Opportunity value by stage"
+            loading={pipelineLoading}
+          >
+            <FunnelChart data={funnelData} height={320} />
           </ChartCard>
 
-          <ChartCard title="Top Products" subtitle="Best performing products by revenue">
+          <ChartCard
+            title="Top Products"
+            subtitle="Best performing products by revenue"
+            loading={productsLoading}
+          >
             <DataTable
-              data={mockTopProducts}
+              data={productTableData}
               keyExtractor={(row) => row.id}
               columns={[
                 { key: 'name', header: 'Product', sortable: true },
@@ -166,30 +217,20 @@ export function Dashboard() {
                   align: 'right',
                   render: (value) => (value as number).toLocaleString(),
                 },
-                {
-                  key: 'growth',
-                  header: 'Growth',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => {
-                    const v = value as number;
-                    const color = v >= 0 ? 'text-success' : 'text-danger';
-                    return <span className={color}>{formatPercent(v)}</span>;
-                  },
-                },
               ]}
               compact
             />
           </ChartCard>
         </div>
 
-        {/* Monthly Revenue Bar Chart */}
+        {/* Revenue Bar Chart */}
         <ChartCard
-          title="Monthly Revenue Comparison"
-          subtitle="Revenue and order count by month"
+          title={`${getGranularityLabel(granularity)} Revenue Comparison`}
+          subtitle={`Revenue breakdown by ${granularity}`}
+          loading={trendsLoading}
         >
           <BarChart
-            data={mockRevenueTrend}
+            data={trendData}
             xKey="date"
             yKeys={['revenue']}
             labels={{ revenue: 'Revenue' }}

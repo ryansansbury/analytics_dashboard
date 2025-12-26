@@ -95,13 +95,15 @@ def generate_sales_reps():
         team = random.choice(TEAMS)
         region = REGIONS[i % len(REGIONS)]
 
-        # Quotas vary by team
+        # Quotas scaled for enterprise software company
+        # With ~$40k avg deal and ~900 deals/rep/year, annual revenue ~$36-45M per rep
+        # Set quotas so attainment ranges from 70-130%
         if team == 'Enterprise':
-            quota = random.randint(400000, 600000)
+            quota = random.randint(38000000, 52000000)  # $38-52M annual
         elif team == 'Mid-Market':
-            quota = random.randint(250000, 400000)
+            quota = random.randint(32000000, 45000000)  # $32-45M annual
         else:
-            quota = random.randint(150000, 250000)
+            quota = random.randint(28000000, 40000000)  # $28-40M annual
 
         reps.append({
             'id': i + 1,

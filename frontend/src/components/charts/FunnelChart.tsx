@@ -21,68 +21,87 @@ export function FunnelChart({
   showConversion = true,
 }: FunnelChartProps) {
   const maxValue = Math.max(...data.map((d) => d.value));
+  const maxCount = data.length > 0 ? data[0].count : 1;
 
   const formatDisplayValue = (value: number) => {
     return formatValue === 'currency' ? formatCurrency(value, true) : formatNumber(value, true);
   };
 
   return (
-    <div className="space-y-3" style={{ minHeight: height }}>
+    <div className="space-y-4" style={{ minHeight: height }}>
       {data.map((stage, index) => {
         const widthPercent = (stage.value / maxValue) * 100;
         const prevStage = index > 0 ? data[index - 1] : null;
-        const conversionRate = prevStage
-          ? ((stage.count / prevStage.count) * 100).toFixed(1)
-          : '100';
+        const stageConversion = prevStage
+          ? ((stage.count / prevStage.count) * 100).toFixed(0)
+          : null;
+        const totalConversion = ((stage.count / maxCount) * 100).toFixed(0);
 
         return (
-          <div key={stage.stage} className="relative">
-            {/* Stage Label */}
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium text-gray-300">{stage.stage}</span>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-white tabular-nums">
-                  {formatDisplayValue(stage.value)}
-                </span>
-                <span className="text-xs text-gray-400 tabular-nums">
-                  {stage.count.toLocaleString()} deals
+          <div key={stage.stage} className="group">
+            {/* Stats Row */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="w-3 h-3 rounded-sm flex-shrink-0"
+                  style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                />
+                <span className="text-sm font-medium text-gray-300 truncate">
+                  {stage.stage}
                 </span>
               </div>
-            </div>
-
-            {/* Bar */}
-            <div className="relative h-10 bg-gray-800 rounded-lg overflow-hidden">
-              <div
-                className="absolute left-0 top-0 h-full rounded-lg transition-all duration-500 ease-out"
-                style={{
-                  width: `${widthPercent}%`,
-                  backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
-                }}
-              />
-
-              {/* Percentage label inside bar */}
-              <div
-                className="absolute inset-0 flex items-center px-3"
-                style={{ width: `${widthPercent}%` }}
-              >
-                {widthPercent > 15 && (
-                  <span className="text-xs font-medium text-white">
-                    {widthPercent.toFixed(0)}%
+              <div className="flex items-center gap-4 text-right">
+                <span className="text-sm font-semibold text-white tabular-nums min-w-[80px]">
+                  {formatDisplayValue(stage.value)}
+                </span>
+                <span className="text-xs text-gray-400 tabular-nums min-w-[70px]">
+                  {stage.count.toLocaleString()} deals
+                </span>
+                {showConversion && (
+                  <span className="text-xs tabular-nums min-w-[50px]">
+                    {index === 0 ? (
+                      <span className="text-gray-500">-</span>
+                    ) : (
+                      <span className="text-primary-400 font-medium">
+                        {stageConversion}%
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Conversion Arrow */}
-            {showConversion && index > 0 && (
-              <div className="absolute -top-5 right-0 flex items-center gap-1 text-xs">
-                <span className="text-gray-500">↓</span>
-                <span className="text-primary-400 font-medium">{conversionRate}%</span>
+            {/* Bar */}
+            <div className="relative h-8 bg-gray-800 rounded-md overflow-hidden">
+              <div
+                className="absolute left-0 top-0 h-full rounded-md transition-all duration-500 ease-out group-hover:opacity-90"
+                style={{
+                  width: `${Math.max(widthPercent, 2)}%`,
+                  backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
+                }}
+              />
+              {/* Overall funnel percentage inside bar */}
+              <div className="absolute inset-0 flex items-center justify-end px-3">
+                <span className="text-xs font-medium text-white/80">
+                  {totalConversion}% of total
+                </span>
               </div>
-            )}
+            </div>
           </div>
         );
       })}
+
+      {/* Legend */}
+      {showConversion && data.length > 1 && (
+        <div className="pt-2 mt-2 border-t border-gray-800">
+          <div className="flex items-center justify-between text-xs text-gray-500">
+            <span>Stage-to-stage conversion rate shown in last column</span>
+            <span>
+              Overall: {((data[data.length - 1]?.count / maxCount) * 100).toFixed(1)}% win rate
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
