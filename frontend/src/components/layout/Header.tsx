@@ -1,8 +1,9 @@
-import { RefreshCw, Moon, Sun, Bell, Download, X, Check } from 'lucide-react';
+import { RefreshCw, Moon, Sun, Bell, Download, X, Check, Loader2 } from 'lucide-react';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useFilters, type DatePreset } from '../../hooks/useFilters';
+import { exportDashboardData } from '../../utils/export';
 
 interface HeaderProps {
   title: string;
@@ -26,14 +27,14 @@ const mockNotifications = [
 export function Header({ title, subtitle }: HeaderProps) {
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('darkMode') !== 'false';
+      return localStorage.getItem('darkMode') === 'true';
     }
-    return true;
+    return false;
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [exportSuccess, setExportSuccess] = useState(false);
+  const [exportStatus, setExportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [notifications, setNotifications] = useState(mockNotifications);
   const { filters, setDatePreset } = useFilters();
   const queryClient = useQueryClient();
@@ -82,13 +83,22 @@ export function Header({ title, subtitle }: HeaderProps) {
     });
   }, []);
 
-  const handleExport = useCallback((_format: 'csv' | 'json' | 'pdf') => {
-    // Simulate export - in production, would trigger actual data export
-    void _format; // Acknowledge parameter for future implementation
+  const handleExport = useCallback(async (format: 'csv' | 'json' | 'pdf') => {
     setShowExportMenu(false);
-    setExportSuccess(true);
-    setTimeout(() => setExportSuccess(false), 2000);
-  }, []);
+    setExportStatus('loading');
+    try {
+      await exportDashboardData(format, {
+        startDate: filters.dateRange.startDate,
+        endDate: filters.dateRange.endDate,
+      });
+      setExportStatus('success');
+      setTimeout(() => setExportStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Export failed:', error);
+      setExportStatus('error');
+      setTimeout(() => setExportStatus('idle'), 2000);
+    }
+  }, [filters.dateRange]);
 
   const markNotificationRead = useCallback((id: number) => {
     setNotifications(prev =>
@@ -146,15 +156,26 @@ export function Header({ title, subtitle }: HeaderProps) {
             <div className="relative" ref={exportRef}>
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
+                disabled={exportStatus === 'loading'}
                 className={clsx(
                   'p-2 rounded-lg transition-colors',
-                  exportSuccess
+                  exportStatus === 'success'
                     ? 'text-green-400 bg-green-900/30'
+                    : exportStatus === 'error'
+                    ? 'text-red-400 bg-red-900/30'
+                    : exportStatus === 'loading'
+                    ? 'text-gray-500'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800'
                 )}
                 aria-label="Export data"
               >
-                {exportSuccess ? <Check className="h-5 w-5" /> : <Download className="h-5 w-5" />}
+                {exportStatus === 'loading' ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : exportStatus === 'success' ? (
+                  <Check className="h-5 w-5" />
+                ) : (
+                  <Download className="h-5 w-5" />
+                )}
               </button>
               {showExportMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-1 z-50">
