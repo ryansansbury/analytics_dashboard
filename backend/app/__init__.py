@@ -1,3 +1,22 @@
+"""
+Analytics Dashboard - Flask Application Factory
+
+This module contains the Flask application factory that creates and configures
+the web application. It follows the Flask application factory pattern to support
+multiple configurations (development, production, testing).
+
+Architecture Overview:
+- Flask backend serves both the REST API and static frontend assets
+- SQLAlchemy ORM for database operations (PostgreSQL in production)
+- CORS enabled for API endpoints to support frontend development
+- Blueprints organize routes by domain (dashboard, revenue, customers, etc.)
+
+Key Components:
+- /api/* routes: RESTful API endpoints for dashboard data
+- Static file serving: Built React frontend served in production
+- Database: Auto-creates tables on startup if they don't exist
+"""
+
 import os
 from flask import Flask, send_from_directory
 from flask_cors import CORS
@@ -5,11 +24,29 @@ from flask_sqlalchemy import SQLAlchemy
 
 from .config import config
 
+# Global SQLAlchemy instance - initialized with app in create_app()
 db = SQLAlchemy()
 
 
 def create_app(config_name: str = None) -> Flask:
-    """Application factory."""
+    """
+    Application factory for creating Flask app instances.
+
+    This factory pattern allows creating multiple app instances with different
+    configurations, which is essential for testing and running different
+    environments (dev/staging/production).
+
+    Args:
+        config_name: Configuration to use ('development', 'production', 'testing').
+                    Defaults to FLASK_ENV environment variable or 'development'.
+
+    Returns:
+        Configured Flask application instance ready to serve requests.
+
+    Example:
+        app = create_app('development')
+        app.run(host='0.0.0.0', port=5001)
+    """
     if config_name is None:
         config_name = os.getenv('FLASK_ENV', 'development')
 

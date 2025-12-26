@@ -1,3 +1,22 @@
+/**
+ * API Service Layer
+ *
+ * Centralized API client for all backend communication. This module provides:
+ * - Type-safe API functions organized by domain (dashboard, revenue, customers, etc.)
+ * - Automatic error handling and JSON parsing
+ * - Query string building for filter parameters
+ *
+ * API Base URL:
+ * - Development: Uses VITE_API_URL env var or defaults to '/api'
+ * - Production: Relative '/api' path (same-origin with Flask backend)
+ *
+ * Usage Example:
+ *   const data = await revenueApi.getTrends({ startDate: '2024-01-01', endDate: '2024-12-31' });
+ *
+ * Error Handling:
+ *   All functions throw on non-2xx responses with the error message from the server.
+ */
+
 import type {
   DashboardSummary,
   RevenueTrend,
@@ -16,8 +35,17 @@ import type {
   DateRange,
 } from '../types';
 
+/** Base URL for API requests - configurable via environment variable */
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
+/**
+ * Generic fetch wrapper with error handling and JSON parsing
+ *
+ * @param endpoint - API endpoint path (e.g., '/dashboard/summary')
+ * @param options - Standard fetch options (method, headers, body, etc.)
+ * @returns Parsed JSON response typed as T
+ * @throws Error with message from server on non-2xx response
+ */
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     headers: {

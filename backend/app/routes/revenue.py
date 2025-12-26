@@ -1,3 +1,20 @@
+"""
+Revenue API Routes
+
+Provides endpoints for revenue analytics including:
+- Time-series revenue trends (daily, weekly, monthly)
+- Revenue breakdown by product category
+- Revenue breakdown by geographic region
+- Revenue breakdown by sales channel
+- Top performing products
+
+All endpoints support date range filtering via query parameters:
+- start_date: Beginning of the period (YYYY-MM-DD)
+- end_date: End of the period (YYYY-MM-DD)
+
+Data is aggregated from the transactions table, filtered to completed transactions only.
+"""
+
 from flask import Blueprint, request
 from sqlalchemy import func, extract
 from datetime import datetime, timedelta
@@ -9,7 +26,18 @@ bp = Blueprint('revenue', __name__, url_prefix='/api/revenue')
 
 @bp.route('/trends')
 def get_trends():
-    """Get revenue trends over time."""
+    """
+    Get revenue trends over time with configurable granularity.
+
+    Query Parameters:
+        start_date (str): Start of date range (default: 365 days ago)
+        end_date (str): End of date range (default: today)
+        granularity (str): Aggregation level - 'day', 'week', or 'month'
+
+    Returns:
+        List of objects with 'date', 'revenue', and 'orders' for each period.
+        Used to render the Revenue Trend area chart on the dashboard.
+    """
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     granularity = request.args.get('granularity', 'day')

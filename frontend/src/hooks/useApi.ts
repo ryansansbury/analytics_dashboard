@@ -1,3 +1,27 @@
+/**
+ * React Query Hooks for API Data Fetching
+ *
+ * This module provides custom React hooks that wrap the API service layer with
+ * React Query for automatic caching, refetching, and state management.
+ *
+ * Key Features:
+ * - Automatic cache key generation based on endpoint and filter parameters
+ * - 30-second stale time for responsive updates
+ * - keepPreviousData for smooth transitions when filters change
+ * - Type-safe return values matching API response types
+ *
+ * Hook Naming Convention:
+ * - use{Domain}{Resource} - e.g., useRevenueTrends, useCustomerSegments
+ *
+ * All hooks automatically subscribe to the global filter context and refetch
+ * when date range changes.
+ *
+ * Usage Example:
+ *   const { data, isLoading, error } = useRevenueTrends('month');
+ *   if (isLoading) return <Spinner />;
+ *   return <Chart data={data} />;
+ */
+
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { useFilters } from './useFilters';
@@ -24,7 +48,13 @@ import type {
   Customer,
 } from '../types';
 
-// Dashboard hooks
+// ============================================================================
+// Dashboard Hooks
+// ============================================================================
+
+/**
+ * Fetch the executive dashboard summary including KPIs, trends, and top-level metrics
+ */
 export function useDashboardSummary(
   options?: Omit<UseQueryOptions<DashboardSummary>, 'queryKey' | 'queryFn'>
 ) {

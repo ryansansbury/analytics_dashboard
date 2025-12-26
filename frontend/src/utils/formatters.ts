@@ -1,6 +1,36 @@
+/**
+ * Formatting Utilities
+ *
+ * This module provides consistent formatting functions for displaying data
+ * throughout the analytics dashboard. All formatters are locale-aware and
+ * use US English (en-US) formatting conventions.
+ *
+ * Categories:
+ * - Currency: Dollar formatting with optional compact notation ($1.2M)
+ * - Numbers: Numeric formatting with thousands separators
+ * - Percentages: Percent formatting with sign indicators
+ * - Dates: Date formatting using date-fns library
+ * - Chart Helpers: Axis formatters and tooltip formatters
+ * - Colors: Chart color palette and trend color helpers
+ */
+
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 
-// Currency formatting
+// ============================================================================
+// Currency Formatting
+// ============================================================================
+
+/**
+ * Format a number as US currency
+ *
+ * @param value - Numeric value to format
+ * @param compact - If true, uses compact notation ($1.2M instead of $1,200,000)
+ * @returns Formatted currency string
+ *
+ * @example
+ * formatCurrency(1234567)        // "$1,234,567"
+ * formatCurrency(1234567, true)  // "$1.2M"
+ */
 export function formatCurrency(value: number, compact = false): string {
   if (compact && Math.abs(value) >= 1_000_000) {
     return new Intl.NumberFormat('en-US', {

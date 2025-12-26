@@ -1,12 +1,41 @@
-// API Response Types
+/**
+ * TypeScript Type Definitions
+ *
+ * Centralized type definitions for the Analytics Dashboard frontend.
+ * These interfaces define the shape of data flowing between the API
+ * and React components.
+ *
+ * Organization:
+ * - API Types: Generic response wrappers
+ * - KPI Types: Key Performance Indicator structures
+ * - Time Series: Temporal data points for charts
+ * - Revenue Types: Revenue breakdowns and trends
+ * - Customer Types: Customer profiles and segments
+ * - Sales Types: Pipeline and sales rep data
+ * - Forecast Types: Predictive analytics structures
+ * - Filter Types: Global filter state definitions
+ * - Component Props: Shared component interfaces
+ */
 
+// ============================================================================
+// API Response Types
+// ============================================================================
+
+/** Generic API response wrapper (not currently used - API returns data directly) */
 export interface ApiResponse<T> {
   data: T;
   success: boolean;
   message?: string;
 }
 
-// KPI Types
+// ============================================================================
+// KPI (Key Performance Indicator) Types
+// ============================================================================
+
+/**
+ * Individual KPI metric with current value and period-over-period comparison
+ * Used in KPICard components across all dashboard pages
+ */
 export interface KPI {
   label: string;
   value: number;
@@ -17,6 +46,7 @@ export interface KPI {
   trend: 'up' | 'down' | 'neutral';
 }
 
+/** Collection of KPIs displayed on the executive dashboard */
 export interface DashboardKPIs {
   totalRevenue: KPI;
   totalCustomers: KPI;
@@ -26,33 +56,43 @@ export interface DashboardKPIs {
   customerGrowth: KPI;
 }
 
+// ============================================================================
 // Time Series Data
+// ============================================================================
+
+/** Generic time series data point for line/area charts */
 export interface TimeSeriesDataPoint {
   date: string;
   value: number;
   previousValue?: number;
 }
 
+/** Revenue trend data point - used in revenue trend charts */
 export interface RevenueTrend {
   date: string;
   revenue: number;
   orders: number;
 }
 
-// Category Data
+// ============================================================================
+// Revenue Breakdown Types
+// ============================================================================
+
+/** Revenue breakdown by product category (donut chart) */
 export interface CategoryData {
   category: string;
   value: number;
   percentage: number;
 }
 
-// Channel Data
+/** Revenue breakdown by sales channel */
 export interface ChannelData {
   channel: string;
   value: number;
   percentage: number;
 }
 
+/** Revenue breakdown by geographic region */
 export interface RegionData {
   region: string;
   revenue: number;
@@ -60,7 +100,11 @@ export interface RegionData {
   growth: number;
 }
 
-// Product Data
+// ============================================================================
+// Product Types
+// ============================================================================
+
+/** Product performance metrics for top products table */
 export interface Product {
   id: number;
   name: string;
@@ -71,7 +115,15 @@ export interface Product {
   avgPrice: number;
 }
 
-// Customer Data
+// ============================================================================
+// Customer Types
+// ============================================================================
+
+/**
+ * Customer profile with segmentation and lifecycle data
+ * Segment tiers: enterprise (large), mid-market, smb (small business)
+ * Status tracks customer health: active, at-risk (warning), churned (lost)
+ */
 export interface Customer {
   id: number;
   name: string;
@@ -84,6 +136,7 @@ export interface Customer {
   region: string;
 }
 
+/** Customer segment summary for segment distribution charts */
 export interface CustomerSegment {
   segment: string;
   count: number;
@@ -91,6 +144,11 @@ export interface CustomerSegment {
   percentage: number;
 }
 
+/**
+ * Cohort retention data - tracks customer retention over 12 months
+ * Each month field (month0-month11) contains the retention percentage
+ * month0 is always 100% (acquisition), subsequent months show retention
+ */
 export interface CohortData {
   cohort: string;
   month0: number;
@@ -107,7 +165,14 @@ export interface CohortData {
   month11: number;
 }
 
-// Sales Team Data
+// ============================================================================
+// Sales Team Types
+// ============================================================================
+
+/**
+ * Sales representative performance metrics
+ * Attainment is calculated as (achieved / quota * 100)
+ */
 export interface SalesRep {
   id: number;
   name: string;
@@ -119,7 +184,11 @@ export interface SalesRep {
   deals: number;
 }
 
-// Pipeline Data
+// ============================================================================
+// Pipeline Types
+// ============================================================================
+
+/** Sales pipeline stage summary for funnel chart */
 export interface PipelineStage {
   stage: string;
   value: number;
@@ -127,6 +196,7 @@ export interface PipelineStage {
   conversionRate: number;
 }
 
+/** Individual sales opportunity in the pipeline */
 export interface PipelineOpportunity {
   id: number;
   name: string;
@@ -138,7 +208,14 @@ export interface PipelineOpportunity {
   salesRep: string;
 }
 
-// Forecasting Data
+// ============================================================================
+// Forecasting Types
+// ============================================================================
+
+/**
+ * Forecast data point with prediction confidence bounds
+ * Used in revenue forecasting chart with uncertainty visualization
+ */
 export interface ForecastDataPoint {
   date: string;
   actual?: number;
@@ -147,6 +224,7 @@ export interface ForecastDataPoint {
   upperBound: number;
 }
 
+/** Customer churn risk assessment for proactive retention */
 export interface ChurnRiskCustomer {
   id: number;
   name: string;
@@ -159,7 +237,14 @@ export interface ChurnRiskCustomer {
   recommendation: string;
 }
 
-// Dashboard Summary
+// ============================================================================
+// Dashboard Summary Type
+// ============================================================================
+
+/**
+ * Complete dashboard summary response
+ * Contains all data needed to render the executive dashboard in one API call
+ */
 export interface DashboardSummary {
   kpis: DashboardKPIs;
   revenueTrend: RevenueTrend[];
@@ -169,13 +254,21 @@ export interface DashboardSummary {
   recentCustomers: Customer[];
 }
 
+// ============================================================================
 // Filter Types
+// ============================================================================
+
+/**
+ * Date range selection for filtering dashboard data
+ * Preset options provide quick selection (last 7 days, YTD, etc.)
+ */
 export interface DateRange {
   startDate: string;
   endDate: string;
   preset?: 'last7d' | 'last30d' | 'last90d' | 'ytd' | 'lastYear' | 'custom';
 }
 
+/** Global filter state shared across all dashboard pages */
 export interface FilterState {
   dateRange: DateRange;
   region?: string;
@@ -183,7 +276,11 @@ export interface FilterState {
   category?: string;
 }
 
-// Chart Props
+// ============================================================================
+// Component Props
+// ============================================================================
+
+/** Base props shared by chart components */
 export interface ChartProps {
   data: unknown[];
   loading?: boolean;
