@@ -51,8 +51,11 @@ def create_app(config_name: str = None) -> Flask:
                 return send_from_directory(static_folder, path)
             return send_from_directory(static_folder, 'index.html')
 
-    # Create tables
+    # Create tables (skip if they already exist)
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception:
+            pass  # Tables already exist
 
     return app
