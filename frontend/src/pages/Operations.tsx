@@ -136,8 +136,8 @@ export function Operations() {
 
         {/* Sales Rep Performance */}
         <ChartCard
-          title="Sales Team Performance (YTD)"
-          subtitle="Pro-rated quota attainment and deal metrics"
+          title="Sales Team Performance"
+          subtitle="Quota attainment for selected period"
           loading={salesLoading}
         >
           <DataTable
@@ -156,7 +156,7 @@ export function Operations() {
               },
               {
                 key: 'achieved',
-                header: 'YTD Achieved',
+                header: 'Achieved',
                 sortable: true,
                 align: 'right',
                 render: (value) => formatCurrency(value as number, true),

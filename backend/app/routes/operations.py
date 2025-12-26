@@ -139,11 +139,6 @@ def get_sales_performance():
     start = datetime.strptime(start_date, '%Y-%m-%d').date()
     end = datetime.strptime(end_date, '%Y-%m-%d').date()
 
-    # Calculate period as fraction of year for quota pro-rating
-    period_days = (end - start).days + 1
-    days_in_year = 365
-    period_fraction = period_days / days_in_year
-
     # Get all sales reps with their achieved revenue in the selected period
     results = db.session.query(
         SalesRep.id,
@@ -167,10 +162,8 @@ def get_sales_performance():
     for row in results:
         achieved = float(row.achieved) if row.achieved else 0
         quota = float(row.quota) if row.quota else 0
-        # Pro-rate quota based on selected period
-        prorated_quota = quota * period_fraction
-        # Calculate attainment against pro-rated quota
-        attainment = round((achieved / prorated_quota * 100), 1) if prorated_quota > 0 else 0
+        # Calculate attainment as percentage of annual quota achieved
+        attainment = round((achieved / quota * 100), 1) if quota > 0 else 0
 
         reps_data.append({
             'id': row.id,

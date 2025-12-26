@@ -142,8 +142,9 @@ export function PieChart<T extends Record<string, unknown>>({
 }
 
 // Donut chart is just a pie chart with innerRadius and always shows labels
+// innerRadius=25 gives ~50% more colored area compared to innerRadius=35
 export function DonutChart<T extends Record<string, unknown>>(
   props: Omit<PieChartProps<T>, 'innerRadius' | 'showLabels'>
 ) {
-  return <PieChart {...props} innerRadius={35} showLabels />;
+  return <PieChart {...props} innerRadius={25} showLabels />;
 }
