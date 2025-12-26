@@ -32,6 +32,11 @@ export function PieChart<T extends Record<string, unknown>>({
   innerRadius = 0,
   formatValue = 'currency',
 }: PieChartProps<T>) {
+  // Sort data by value descending for consistent display
+  const sortedData = [...data].sort((a, b) =>
+    (Number(b[valueKey]) || 0) - (Number(a[valueKey]) || 0)
+  );
+
   const formatTooltipValue = (value: number) => {
     switch (formatValue) {
       case 'currency':
@@ -43,7 +48,7 @@ export function PieChart<T extends Record<string, unknown>>({
     }
   };
 
-  const total = data.reduce((sum, item) => sum + (Number(item[valueKey]) || 0), 0);
+  const total = sortedData.reduce((sum, item) => sum + (Number(item[valueKey]) || 0), 0);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderLabel = (props: any) => {
@@ -74,7 +79,7 @@ export function PieChart<T extends Record<string, unknown>>({
     <ResponsiveContainer width="100%" height={height}>
       <RechartsPieChart>
         <Pie
-          data={data}
+          data={sortedData}
           cx="50%"
           cy="50%"
           labelLine={false}
@@ -85,7 +90,7 @@ export function PieChart<T extends Record<string, unknown>>({
           dataKey={String(valueKey)}
           nameKey={String(nameKey)}
         >
-          {data.map((_, index) => (
+          {sortedData.map((_, index) => (
             <Cell
               key={`cell-${index}`}
               fill={colors[index % colors.length]}
@@ -101,6 +106,8 @@ export function PieChart<T extends Record<string, unknown>>({
             borderRadius: '8px',
             fontSize: '12px',
           }}
+          labelStyle={{ color: '#9CA3AF' }}
+          itemStyle={{ color: '#D1D5DB' }}
           formatter={(value, name) => {
             const numValue = Number(value) || 0;
             const percentage = ((numValue / total) * 100).toFixed(1);
@@ -118,7 +125,7 @@ export function PieChart<T extends Record<string, unknown>>({
             verticalAlign="middle"
             wrapperStyle={{ fontSize: '12px', paddingLeft: '20px' }}
             formatter={(value) => {
-              const item = data.find((d) => d[nameKey] === value);
+              const item = sortedData.find((d) => d[nameKey] === value);
               const itemValue = item ? Number(item[valueKey]) : 0;
               const percentage = ((itemValue / total) * 100).toFixed(1);
               return (
@@ -134,9 +141,9 @@ export function PieChart<T extends Record<string, unknown>>({
   );
 }
 
-// Donut chart is just a pie chart with innerRadius
+// Donut chart is just a pie chart with innerRadius and always shows labels
 export function DonutChart<T extends Record<string, unknown>>(
-  props: Omit<PieChartProps<T>, 'innerRadius'>
+  props: Omit<PieChartProps<T>, 'innerRadius' | 'showLabels'>
 ) {
-  return <PieChart {...props} innerRadius={35} />;
+  return <PieChart {...props} innerRadius={35} showLabels />;
 }

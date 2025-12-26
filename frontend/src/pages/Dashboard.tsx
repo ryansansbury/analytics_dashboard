@@ -178,7 +178,6 @@ export function Dashboard() {
               nameKey="category"
               valueKey="value"
               height={320}
-              showLabels
             />
           </ChartCard>
         </div>
