@@ -38,6 +38,17 @@ def create_app(config_name: str = None) -> Flask:
     def health():
         return {'status': 'healthy', 'environment': config_name}
 
+    # One-time seed endpoint (remove after seeding)
+    @app.route('/api/seed-database')
+    def seed_db_endpoint():
+        try:
+            from data.seed_data import seed_database as run_seed
+            run_seed()
+            return {'status': 'success', 'message': 'Database seeded successfully'}
+        except Exception as e:
+            import traceback
+            return {'status': 'error', 'message': str(e), 'trace': traceback.format_exc()}, 500
+
     # Serve frontend static files in production
     if has_static:
         @app.route('/')
