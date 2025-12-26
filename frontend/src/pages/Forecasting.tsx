@@ -12,7 +12,7 @@ import { useFilters } from '../hooks/useFilters';
 export function Forecasting() {
   const { filters } = useFilters();
 
-  // Fetch real data from API
+  // Fetch real data from API - all data varies by selected date range
   const { data: revenueForecast, isLoading: forecastLoading } = useRevenueForecast(6);
   const { data: churnRiskData, isLoading: churnLoading } = useChurnRisk(10);
   const { data: seasonalityData, isLoading: seasonalityLoading } = useSeasonality();

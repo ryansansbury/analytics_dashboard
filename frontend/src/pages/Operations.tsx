@@ -11,7 +11,8 @@ import { useFilters } from '../hooks/useFilters';
 
 export function Operations() {
   const { filters } = useFilters();
-  // Fetch real data from API
+
+  // Fetch real data from API - all data varies by selected date range
   const { data: pipelineData, isLoading: pipelineLoading } = usePipeline();
   const { data: pipelineKpis, isLoading: kpisLoading } = usePipelineKpis();
   const { data: salesReps, isLoading: salesLoading } = useSalesPerformance();
