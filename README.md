@@ -14,29 +14,37 @@ A full-stack business intelligence dashboard featuring real-time KPI tracking, i
 - **KPI Cards** - Track key metrics including Total Revenue, Customers, Average Order Value, Conversion Rate, Pipeline Value, and Growth Rate
 - **Revenue Trends** - Interactive area charts with configurable granularity (daily, weekly, monthly)
 - **Category Distribution** - Donut charts showing revenue breakdown by product category
-- **Sales Pipeline** - Funnel visualization of opportunity stages from Lead to Closed Won
+- **Sales Pipeline** - Funnel visualization with pipeline percentage per stage
 - **Top Products** - Sortable table of best-performing products
 
 ### Revenue Analytics
-- Detailed revenue breakdowns and trend analysis
-- Period-over-period comparisons
-- Category and segment performance tracking
+- Detailed revenue breakdowns by category, region, and channel
+- Period-over-period comparisons with change percentages
+- Interactive bar and area charts with date range filtering
 
 ### Customer Intelligence
-- Customer segmentation and lifecycle analysis
-- Revenue attribution by customer segment
-- Customer health metrics
+- **Segmentation** - Customer distribution across enterprise, mid-market, and SMB tiers
+- **Cohort Retention** - 12-month retention analysis with heatmap visualization
+- **At-Risk Customers** - Identify customers showing signs of potential churn
+- **Lifetime Value Distribution** - LTV analysis across customer base
 
 ### Operations
-- Operational performance metrics
-- Sales team performance tracking
-- Process efficiency analytics
+- **Sales Pipeline** - Full funnel visualization from Lead to Closed Won
+- **Sales Team Performance** - Quota attainment tracking (top 5 exceeding, bottom 5 developing)
+- **Deal Cycle Time** - Average days per pipeline stage
+- **Stage Conversion Rates** - Stage-to-stage conversion analysis
 
 ### ML-Powered Forecasting
-- **Revenue Predictions** - 6-month forward projections using time series analysis
-- **Churn Risk Scoring** - ML-identified at-risk customers with actionable recommendations
-- **Seasonality Analysis** - Historical pattern detection for planning
-- **Model Performance Metrics** - MAPE, R² Score, RMSE tracking
+- **Revenue Predictions** - 6-month forward projections with confidence intervals
+- **Churn Risk Scoring** - At-risk customers with actionable recommendations
+- **Seasonality Analysis** - Monthly seasonality index for planning
+- **Model Performance Metrics** - Accuracy tracking and forecast confidence
+
+### Global Features
+- **Date Range Filtering** - Preset ranges (Last 7 days, 30 days, 90 days, YTD, Last Year) or custom dates
+- **Data Export** - Export dashboard data as CSV, JSON, or PDF
+- **Light/Dark Mode** - Toggle between themes (defaults to light mode)
+- **Responsive Design** - Works on desktop and tablet screens
 
 ## Tech Stack
 
@@ -77,9 +85,7 @@ cd analytics_dashboard
 # Start all services
 docker-compose up -d
 
-# Access the application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:5000
+# Access the application at http://localhost:5001
 ```
 
 ### Local Development
@@ -99,7 +105,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your database credentials
 
-# Run the development server
+# Run the development server (runs on http://localhost:5001)
 python run.py
 ```
 
@@ -110,32 +116,59 @@ cd frontend
 # Install dependencies
 npm install
 
-# Start development server
+# Start development server (runs on http://localhost:5173)
 npm run dev
 
-# Build for production
+# Build for production (outputs to dist/, copied to backend/static/)
 npm run build
+```
+
+#### Production Deployment
+The Flask backend serves both the API and the built frontend static files. After building the frontend, copy the `dist/` contents to `backend/static/`:
+
+```bash
+# Build frontend and copy to backend
+cd frontend && npm run build
+cp -r dist/* ../backend/static/
 ```
 
 ## API Endpoints
 
+All endpoints support `start_date` and `end_date` query parameters (YYYY-MM-DD format).
+
 ### Dashboard
-- `GET /api/dashboard/summary` - KPI summary with change percentages
-- `GET /api/dashboard/pipeline` - Sales pipeline stages
+- `GET /api/dashboard/summary` - Complete dashboard data (KPIs, trends, categories, pipeline)
+- `GET /api/dashboard/kpis` - KPI values with change percentages
 
 ### Revenue
-- `GET /api/revenue/trends` - Revenue time series data
-- `GET /api/revenue/by-category` - Revenue breakdown by category
-- `GET /api/revenue/top-products` - Top performing products
+- `GET /api/revenue/trends` - Revenue time series (supports `granularity`: day/week/month)
+- `GET /api/revenue/by-category` - Revenue breakdown by product category
+- `GET /api/revenue/by-region` - Revenue breakdown by geographic region
+- `GET /api/revenue/by-channel` - Revenue breakdown by sales channel
+- `GET /api/revenue/top-products` - Top performing products (supports `limit`)
 
 ### Customers
-- `GET /api/customers/segments` - Customer segmentation data
-- `GET /api/customers/list` - Paginated customer list
+- `GET /api/customers/overview` - Customer KPIs (total, new, churned, at-risk)
+- `GET /api/customers/segments` - Customer segmentation distribution
+- `GET /api/customers/cohorts` - 12-month cohort retention data
+- `GET /api/customers/lifetime-value` - LTV distribution by range
+- `GET /api/customers/acquisition` - Customer acquisition by channel over time
+- `GET /api/customers/at-risk` - At-risk customer list (supports `limit`)
+
+### Operations
+- `GET /api/operations/pipeline` - Sales pipeline by stage
+- `GET /api/operations/pipeline-kpis` - Pipeline KPIs (value, cycle time, win rate)
+- `GET /api/operations/sales-performance` - Sales rep quota attainment
+- `GET /api/operations/conversion-rates` - Stage-to-stage conversion rates
+- `GET /api/operations/cycle-time` - Average days per pipeline stage
+- `GET /api/operations/opportunities` - Pipeline opportunities (supports `stage`, `limit`)
 
 ### Forecasting
-- `GET /api/forecasting/revenue` - ML revenue predictions
-- `GET /api/forecasting/churn-risk` - At-risk customer predictions
-- `GET /api/forecasting/seasonality` - Seasonal patterns
+- `GET /api/forecasting/revenue` - Revenue forecast with confidence intervals
+- `GET /api/forecasting/pipeline` - Weighted pipeline forecast
+- `GET /api/forecasting/churn-risk` - At-risk customers with recommendations
+- `GET /api/forecasting/seasonality` - Monthly seasonality indices
+- `GET /api/forecasting/kpis` - Forecasting KPIs (predicted revenue, accuracy)
 
 ## Project Structure
 
@@ -144,24 +177,31 @@ analytics_dashboard/
 ├── frontend/                 # React frontend application
 │   ├── src/
 │   │   ├── components/       # Reusable UI components
-│   │   │   ├── cards/        # KPI and chart cards
+│   │   │   ├── cards/        # KPI and chart card wrappers
 │   │   │   ├── charts/       # Chart components (Area, Bar, Pie, Funnel)
-│   │   │   ├── common/       # Shared components
-│   │   │   ├── layout/       # Layout components (Header, Sidebar)
+│   │   │   ├── common/       # Shared components (ErrorBoundary, Loading)
+│   │   │   ├── layout/       # Layout components (Header, Sidebar, Layout)
 │   │   │   └── tables/       # Data table components
-│   │   ├── hooks/            # Custom React hooks
-│   │   ├── pages/            # Page components
-│   │   ├── services/         # API client
-│   │   ├── types/            # TypeScript definitions
-│   │   └── utils/            # Utility functions
-│   └── package.json
+│   │   ├── hooks/            # Custom React hooks (useApi, useFilters)
+│   │   ├── pages/            # Page components (Dashboard, Revenue, etc.)
+│   │   ├── services/         # API client layer
+│   │   ├── types/            # TypeScript type definitions
+│   │   └── utils/            # Utilities (formatters, export)
+│   ├── package.json
+│   └── vite.config.ts
 ├── backend/                  # Flask backend API
 │   ├── app/
-│   │   ├── models/           # SQLAlchemy models
-│   │   └── routes/           # API route handlers
+│   │   ├── models/           # SQLAlchemy ORM models
+│   │   ├── routes/           # API route handlers by domain
+│   │   ├── __init__.py       # Application factory
+│   │   └── config.py         # Environment configurations
+│   ├── data/
+│   │   └── seed_data.py      # Synthetic data generator
+│   ├── static/               # Built frontend assets (production)
 │   ├── requirements.txt
-│   └── run.py
+│   └── run.py                # Application entry point
 ├── docker-compose.yml
+├── Dockerfile
 └── README.md
 ```
 
@@ -170,14 +210,25 @@ analytics_dashboard/
 ### Backend
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | - |
-| `SECRET_KEY` | Flask secret key | - |
+| `DATABASE_URL` | PostgreSQL connection string | Required |
+| `SECRET_KEY` | Flask secret key for sessions | Required |
 | `FLASK_ENV` | Environment mode | `development` |
 
 ### Frontend
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VITE_API_URL` | Backend API URL | `http://localhost:5000` |
+| `VITE_API_URL` | Backend API URL | `/api` (relative) |
+
+## Database Schema
+
+The application uses 6 main tables:
+
+- **products** - Product catalog (name, category, pricing)
+- **customers** - Customer accounts (segment, LTV, status, acquisition)
+- **sales_reps** - Sales team (name, team, region, quota)
+- **transactions** - Completed orders linking customers, products, and reps
+- **pipeline** - Active sales opportunities with stage tracking
+- **daily_metrics** - Pre-aggregated daily metrics (optional)
 
 ## License
 
