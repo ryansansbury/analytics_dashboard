@@ -105,11 +105,13 @@ def get_pipeline_kpis():
     avg_deal = pipeline_value / max(1, int(total_deals * variation))
     win_rate = (closed_won / leads) * 100 * random.uniform(0.95, 1.05)
 
-    # Generate change percentages that vary by period
-    pipeline_change = random.uniform(3.0, 12.0)
-    cycle_change = random.uniform(-8.0, 5.0)
-    win_rate_change = random.uniform(-3.0, 8.0)
-    deal_size_change = random.uniform(2.0, 10.0)
+    # Generate change percentages that vary by period - ALWAYS non-zero
+    pipeline_change = random.uniform(5.0, 15.0)
+    # Cycle time: negative is good (faster), but never 0
+    cycle_change = random.choice([-1, 1]) * random.uniform(2.0, 8.0)
+    # Win rate change
+    win_rate_change = random.choice([-1, 1]) * random.uniform(1.5, 6.0)
+    deal_size_change = random.uniform(3.0, 12.0)
 
     return {
         'pipelineValue': round(pipeline_value, 2),

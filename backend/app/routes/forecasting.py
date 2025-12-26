@@ -179,15 +179,17 @@ def get_forecasting_kpis():
     # Calculate predicted revenue (varies by date)
     base_predicted = 4500000
     predicted_revenue = base_predicted * random.uniform(0.85, 1.15)
-    predicted_change = random.uniform(5.0, 18.0)
+    predicted_change = random.uniform(8.0, 18.0)
 
-    # At-risk customers count (varies slightly)
-    at_risk_count = 8 + random.randint(-2, 4)
-    at_risk_change = random.uniform(-12.0, 8.0)
+    # At-risk customers count (varies)
+    at_risk_count = 6 + random.randint(0, 6)
+    # Always non-zero: use choice to pick direction then magnitude
+    at_risk_change = random.choice([-1, 1]) * random.uniform(3.0, 12.0)
 
     # Model accuracy (varies slightly)
     model_accuracy = 92.0 + random.uniform(0, 4.0)
-    accuracy_change = random.uniform(-1.0, 2.0)
+    # Model accuracy change is small but never 0
+    accuracy_change = random.choice([-1, 1]) * random.uniform(0.5, 2.0)
 
     return {
         'predictedRevenue': round(predicted_revenue, 2),
