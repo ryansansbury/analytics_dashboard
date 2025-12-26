@@ -144,7 +144,7 @@ def get_segments():
 
 @bp.route('/cohorts')
 def get_cohorts():
-    """Get cohort retention analysis."""
+    """Get cohort retention analysis - 12 months of data."""
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
@@ -167,16 +167,17 @@ def get_cohorts():
         func.date_trunc('month', Customer.acquisition_date)
     ).order_by(
         func.date_trunc('month', Customer.acquisition_date).desc()
-    ).limit(8).all()
+    ).limit(12).all()
 
-    # Generate realistic retention rates that vary by cohort
+    # Generate realistic retention rates that vary by cohort - 12 months of retention
     result = []
     for i, cohort in enumerate(cohorts):
         cohort_date = cohort.cohort
         if cohort_date:
             # Vary retention slightly per cohort for realism
             random.seed(hash(cohort_date.strftime('%Y-%m')) % 1000)
-            base_retention = [100, 92, 88, 85, 82, 80, 78]
+            # Base retention curve - gradual decline that stabilizes
+            base_retention = [100, 92, 88, 85, 82, 80, 78, 76, 75, 74, 73, 72]
             retention = {
                 'cohort': cohort_date.strftime('%b %Y'),
                 'month0': 100,
@@ -186,6 +187,11 @@ def get_cohorts():
                 'month4': base_retention[4] + random.randint(-5, 5),
                 'month5': base_retention[5] + random.randint(-6, 4),
                 'month6': base_retention[6] + random.randint(-6, 4),
+                'month7': base_retention[7] + random.randint(-5, 4),
+                'month8': base_retention[8] + random.randint(-5, 4),
+                'month9': base_retention[9] + random.randint(-4, 4),
+                'month10': base_retention[10] + random.randint(-4, 4),
+                'month11': base_retention[11] + random.randint(-4, 4),
             }
             result.append(retention)
 

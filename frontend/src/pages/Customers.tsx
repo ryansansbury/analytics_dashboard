@@ -40,7 +40,7 @@ export function Customers() {
     riskScore: 0.65 + ((index % 5) * 0.05) + (item.lifetimeValue > 50000 ? 0.1 : 0),
   }));
 
-  // Transform cohort data for display
+  // Transform cohort data for display - 12 months
   const cohortTableData = (cohorts || []).map(cohort => ({
     cohort: cohort.cohort,
     m0: cohort.month0 || 100,
@@ -50,6 +50,11 @@ export function Customers() {
     m4: cohort.month4 || 0,
     m5: cohort.month5 || 0,
     m6: cohort.month6 || 0,
+    m7: cohort.month7 || 0,
+    m8: cohort.month8 || 0,
+    m9: cohort.month9 || 0,
+    m10: cohort.month10 || 0,
+    m11: cohort.month11 || 0,
   }));
 
   return (
@@ -130,36 +135,41 @@ export function Customers() {
         {/* Cohort Analysis */}
         <ChartCard
           title="Cohort Retention"
-          subtitle="Monthly retention rates by acquisition cohort"
+          subtitle="Monthly retention rates by acquisition cohort (12 months)"
           loading={cohortsLoading}
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Cohort</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">M0</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">M1</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">M2</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">M3</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">M4</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">M5</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">M6</th>
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase sticky left-0 bg-gray-900">Cohort</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M0</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M1</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M2</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M3</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M4</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M5</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M6</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M7</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M8</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M9</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M10</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase">M11</th>
                 </tr>
               </thead>
               <tbody>
                 {cohortTableData.length > 0 ? cohortTableData.map((row) => (
                   <tr key={row.cohort} className="border-b border-gray-800/50">
-                    <td className="px-4 py-3 text-gray-300">{row.cohort}</td>
-                    {[row.m0, row.m1, row.m2, row.m3, row.m4, row.m5, row.m6].map((val, i) => (
+                    <td className="px-3 py-3 text-gray-300 sticky left-0 bg-gray-900">{row.cohort}</td>
+                    {[row.m0, row.m1, row.m2, row.m3, row.m4, row.m5, row.m6, row.m7, row.m8, row.m9, row.m10, row.m11].map((val, i) => (
                       <td
                         key={i}
-                        className="px-4 py-3 text-center"
+                        className="px-2 py-3 text-center"
                         style={{
                           backgroundColor: val > 0 ? `rgba(6, 182, 212, ${val / 100 * 0.6})` : 'transparent',
                         }}
                       >
-                        <span className={val > 0 ? 'text-white' : 'text-gray-600'}>
+                        <span className={val > 0 ? 'text-white text-xs' : 'text-gray-600'}>
                           {val > 0 ? `${val}%` : '-'}
                         </span>
                       </td>
@@ -167,7 +177,7 @@ export function Customers() {
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={13} className="px-4 py-8 text-center text-gray-500">
                       No cohort data available
                     </td>
                   </tr>
