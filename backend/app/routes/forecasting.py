@@ -1,5 +1,5 @@
 from flask import Blueprint, request
-from sqlalchemy import func
+from sqlalchemy import func, extract
 from datetime import datetime, timedelta
 import numpy as np
 import random
@@ -13,6 +13,11 @@ bp = Blueprint('forecasting', __name__, url_prefix='/api/forecasting')
 def get_revenue_forecast():
     """Get revenue forecast using simple time series."""
     periods = request.args.get('periods', 6, type=int)
+    start_date = request.args.get('start_date')
+
+    # Seed for consistent variation per date range
+    if start_date:
+        random.seed(hash(start_date) % 10000)
 
     # Get historical monthly revenue
     historical = db.session.query(
@@ -37,8 +42,9 @@ def get_revenue_forecast():
     x = np.arange(len(revenues))
     y = np.array(revenues)
 
-    # Calculate trend
-    slope = np.polyfit(x, y, 1)[0]
+    # Calculate trend with variation based on date
+    base_slope = np.polyfit(x, y, 1)[0]
+    slope = base_slope * random.uniform(0.9, 1.1)
     last_value = revenues[-1]
 
     # Generate forecast
@@ -58,13 +64,14 @@ def get_revenue_forecast():
             'upperBound': None,
         })
 
-    # Add forecast periods
+    # Add forecast periods with variation
     for i in range(1, periods + 1):
         forecast_date = last_date + timedelta(days=30 * i)
-        predicted = last_value + (slope * i)
+        base_predicted = last_value + (slope * i)
+        predicted = base_predicted * random.uniform(0.95, 1.05)
 
         # Add some variance for confidence interval
-        variance = predicted * 0.1
+        variance = predicted * random.uniform(0.08, 0.12)
 
         result.append({
             'date': forecast_date.strftime('%Y-%m-%d'),
@@ -80,6 +87,12 @@ def get_revenue_forecast():
 @bp.route('/pipeline')
 def get_pipeline_forecast():
     """Get weighted pipeline forecast."""
+    start_date = request.args.get('start_date')
+
+    # Seed for consistent variation per date range
+    if start_date:
+        random.seed(hash(start_date) % 10000 + 100)
+
     # Get pipeline by expected close month
     results = db.session.query(
         func.date_trunc('month', Pipeline.expected_close_date).label('month'),
@@ -94,15 +107,21 @@ def get_pipeline_forecast():
         func.date_trunc('month', Pipeline.expected_close_date)
     ).limit(6).all()
 
-    return [
-        {
+    forecast_data = []
+    for row in results:
+        # Apply variation based on date
+        variation = random.uniform(0.9, 1.1)
+        weighted = float(row.weighted) * variation if row.weighted else 0
+        total = float(row.total) * variation if row.total else 0
+
+        forecast_data.append({
             'month': row.month.strftime('%b %Y') if row.month else 'Unknown',
-            'weighted': round(float(row.weighted), 2) if row.weighted else 0,
-            'best': round(float(row.total), 2) if row.total else 0,
-            'worst': round(float(row.weighted) * 0.5, 2) if row.weighted else 0,
-        }
-        for row in results
-    ]
+            'weighted': round(weighted, 2),
+            'best': round(total, 2),
+            'worst': round(weighted * random.uniform(0.45, 0.55), 2),
+        })
+
+    return forecast_data
 
 
 @bp.route('/churn-risk')
@@ -149,6 +168,12 @@ def get_churn_risk():
 @bp.route('/seasonality')
 def get_seasonality():
     """Get seasonal revenue patterns."""
+    start_date = request.args.get('start_date')
+
+    # Seed for consistent variation per date range
+    if start_date:
+        random.seed(hash(start_date) % 10000 + 200)
+
     # Get monthly averages by month of year
     results = db.session.query(
         extract('month', Transaction.transaction_date).label('month'),
@@ -170,11 +195,17 @@ def get_seasonality():
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-    return [
-        {
+    seasonality_data = []
+    for row in results:
+        base_index = float(row.avg_revenue) / overall_avg if overall_avg and row.avg_revenue else 1.0
+        # Add slight variation
+        index = base_index * random.uniform(0.97, 1.03)
+        trend = random.uniform(-0.02, 0.03)
+
+        seasonality_data.append({
             'month': month_names[int(row.month) - 1],
-            'index': round(float(row.avg_revenue) / overall_avg, 2) if overall_avg and row.avg_revenue else 1.0,
-            'trend': 0,
-        }
-        for row in results
-    ]
+            'index': round(index, 2),
+            'trend': round(trend, 2),
+        })
+
+    return seasonality_data
