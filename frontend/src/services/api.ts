@@ -219,6 +219,7 @@ export const forecastingApi = {
       `/forecasting/revenue${buildQueryString({
         periods,
         start_date: dateRange?.startDate,
+        end_date: dateRange?.endDate,
       })}`
     ),
 
@@ -226,6 +227,7 @@ export const forecastingApi = {
     fetchApi<{ month: string; weighted: number; best: number; worst: number }[]>(
       `/forecasting/pipeline${buildQueryString({
         start_date: dateRange?.startDate,
+        end_date: dateRange?.endDate,
       })}`
     ),
 
@@ -234,6 +236,7 @@ export const forecastingApi = {
       `/forecasting/churn-risk${buildQueryString({
         limit,
         start_date: dateRange?.startDate,
+        end_date: dateRange?.endDate,
       })}`
     ),
 
@@ -241,6 +244,7 @@ export const forecastingApi = {
     fetchApi<{ month: string; index: number; trend: number }[]>(
       `/forecasting/seasonality${buildQueryString({
         start_date: dateRange?.startDate,
+        end_date: dateRange?.endDate,
       })}`
     ),
 
@@ -256,6 +260,7 @@ export const forecastingApi = {
     }>(
       `/forecasting/kpis${buildQueryString({
         start_date: dateRange?.startDate,
+        end_date: dateRange?.endDate,
       })}`
     ),
 };

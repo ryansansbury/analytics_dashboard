@@ -14,10 +14,11 @@ def get_revenue_forecast():
     """Get revenue forecast using simple time series."""
     periods = request.args.get('periods', 6, type=int)
     start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
 
     # Seed for consistent variation per date range
-    if start_date:
-        random.seed(hash(start_date) % 10000)
+    if start_date or end_date:
+        random.seed(hash(f"{start_date}{end_date}") % 10000)
 
     # Get historical monthly revenue
     historical = db.session.query(
@@ -88,10 +89,11 @@ def get_revenue_forecast():
 def get_pipeline_forecast():
     """Get weighted pipeline forecast."""
     start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
 
     # Seed for consistent variation per date range
-    if start_date:
-        random.seed(hash(start_date) % 10000 + 100)
+    if start_date or end_date:
+        random.seed(hash(f"{start_date}{end_date}") % 10000 + 100)
 
     # Get pipeline by expected close month
     results = db.session.query(
@@ -129,6 +131,7 @@ def get_churn_risk():
     """Get customers at risk of churning."""
     limit = request.args.get('limit', 10, type=int)
     start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
 
     # Get at-risk customers
     results = db.session.query(Customer).filter(
@@ -138,8 +141,8 @@ def get_churn_risk():
     ).limit(limit).all()
 
     # Seed random based on date for consistent but varying results
-    if start_date:
-        random.seed(hash(start_date) % 1000)
+    if start_date or end_date:
+        random.seed(hash(f"{start_date}{end_date}") % 1000)
     else:
         random.seed(42)
 
@@ -169,10 +172,11 @@ def get_churn_risk():
 def get_forecasting_kpis():
     """Get forecasting KPIs with change percentages."""
     start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
 
     # Seed for consistent but varying results per date
-    if start_date:
-        random.seed(hash(start_date) % 10000 + 300)
+    if start_date or end_date:
+        random.seed(hash(f"{start_date}{end_date}") % 10000 + 300)
     else:
         random.seed(42)
 
@@ -206,10 +210,11 @@ def get_forecasting_kpis():
 def get_seasonality():
     """Get seasonal revenue patterns."""
     start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
 
     # Seed for consistent variation per date range
-    if start_date:
-        random.seed(hash(start_date) % 10000 + 200)
+    if start_date or end_date:
+        random.seed(hash(f"{start_date}{end_date}") % 10000 + 200)
 
     # Get monthly averages by month of year
     results = db.session.query(

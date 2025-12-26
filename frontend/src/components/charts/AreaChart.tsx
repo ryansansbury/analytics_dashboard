@@ -79,6 +79,7 @@ export function AreaChart<T extends Record<string, unknown>>({
           tickLine={false}
           axisLine={false}
           tickFormatter={(value) => formatDateShort(value)}
+          interval={1}
         />
 
         <YAxis

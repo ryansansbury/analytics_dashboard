@@ -117,7 +117,7 @@ export function Forecasting() {
               <span className="text-gray-400">Actual</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CHART_COLORS[1] }} />
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#10B981' }} />
               <span className="text-gray-400">Predicted</span>
             </div>
           </div>
@@ -126,7 +126,7 @@ export function Forecasting() {
             xKey="date"
             yKeys={['actual', 'predicted']}
             labels={{ actual: 'Actual Revenue', predicted: 'Predicted Revenue' }}
-            colors={[CHART_COLORS[0], CHART_COLORS[1]]}
+            colors={[CHART_COLORS[0], '#10B981']}
             height={350}
             showLegend={false}
           />

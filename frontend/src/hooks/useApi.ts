@@ -257,7 +257,7 @@ export function useRevenueForecast(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['forecasting', 'revenue', periods, filters.dateRange.startDate],
+    queryKey: ['forecasting', 'revenue', periods, filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => forecastingApi.getRevenueForecast(periods, filters.dateRange),
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
@@ -272,7 +272,7 @@ export function useChurnRisk(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['forecasting', 'churn-risk', limit, filters.dateRange.startDate],
+    queryKey: ['forecasting', 'churn-risk', limit, filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => forecastingApi.getChurnRisk(limit, filters.dateRange),
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
@@ -286,7 +286,7 @@ export function useSeasonality(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['forecasting', 'seasonality', filters.dateRange.startDate],
+    queryKey: ['forecasting', 'seasonality', filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => forecastingApi.getSeasonality(filters.dateRange),
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
@@ -311,7 +311,7 @@ export function useForecastingKpis(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['forecasting', 'kpis', filters.dateRange.startDate],
+    queryKey: ['forecasting', 'kpis', filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => forecastingApi.getKpis(filters.dateRange),
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,

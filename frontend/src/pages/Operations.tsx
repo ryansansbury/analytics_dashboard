@@ -33,7 +33,7 @@ export function Operations() {
     const toStage = funnelData[i + 1];
     const rate = fromStage.count > 0 ? (toStage.count / fromStage.count) * 100 : 0;
     conversionRates.push({
-      fromStage: `${fromStage.stage} → ${toStage.stage}`,
+      fromStage: `${fromStage.stage} to ${toStage.stage}`,
       rate: Math.round(rate * 10) / 10,
     });
   }

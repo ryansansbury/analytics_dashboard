@@ -35,7 +35,6 @@ export function FunnelChart({
         const stageConversion = prevStage
           ? ((stage.count / prevStage.count) * 100).toFixed(0)
           : null;
-        const totalConversion = ((stage.count / maxCount) * 100).toFixed(0);
 
         return (
           <div key={stage.stage} className="group">
@@ -80,12 +79,6 @@ export function FunnelChart({
                   backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
                 }}
               />
-              {/* Overall funnel percentage inside bar */}
-              <div className="absolute inset-0 flex items-center justify-end px-3">
-                <span className="text-xs font-medium text-white/80">
-                  {totalConversion}% of total
-                </span>
-              </div>
             </div>
           </div>
         );
