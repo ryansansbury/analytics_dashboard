@@ -31,9 +31,9 @@ export function useDashboardSummary(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['dashboard', 'summary', filters.dateRange],
+    queryKey: ['dashboard', 'summary', filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => dashboardApi.getSummary(filters.dateRange),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000, // 30 seconds for more responsive updates
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -47,9 +47,9 @@ export function useRevenueTrends(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['revenue', 'trends', filters.dateRange, granularity],
+    queryKey: ['revenue', 'trends', filters.dateRange.startDate, filters.dateRange.endDate, granularity],
     queryFn: () => revenueApi.getTrends(filters.dateRange, granularity),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -61,9 +61,9 @@ export function useRevenueByCategory(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['revenue', 'by-category', filters.dateRange],
+    queryKey: ['revenue', 'by-category', filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => revenueApi.getByCategory(filters.dateRange),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -75,9 +75,9 @@ export function useRevenueByRegion(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['revenue', 'by-region', filters.dateRange],
+    queryKey: ['revenue', 'by-region', filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => revenueApi.getByRegion(filters.dateRange),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -89,9 +89,9 @@ export function useRevenueByChannel(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['revenue', 'by-channel', filters.dateRange],
+    queryKey: ['revenue', 'by-channel', filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => revenueApi.getByChannel(filters.dateRange),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -104,9 +104,9 @@ export function useTopProducts(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['revenue', 'top-products', filters.dateRange, limit],
+    queryKey: ['revenue', 'top-products', filters.dateRange.startDate, filters.dateRange.endDate, limit],
     queryFn: () => revenueApi.getTopProducts(filters.dateRange, limit),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -122,9 +122,9 @@ export function useCustomerOverview(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['customers', 'overview', filters.dateRange],
+    queryKey: ['customers', 'overview', filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => customerApi.getOverview(filters.dateRange),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });
@@ -136,9 +136,9 @@ export function useCustomerSegments(
   const { filters } = useFilters();
 
   return useQuery({
-    queryKey: ['customers', 'segments', filters.dateRange],
+    queryKey: ['customers', 'segments', filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => customerApi.getSegments(filters.dateRange),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
   });

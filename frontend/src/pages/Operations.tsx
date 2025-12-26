@@ -135,6 +135,7 @@ export function Operations() {
             formatY="number"
             labels={{ avgDays: 'Days' }}
             height={250}
+            colors={['#06B6D4']}
           />
         </ChartCard>
 

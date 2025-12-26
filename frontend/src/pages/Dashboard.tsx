@@ -7,7 +7,7 @@ import { BarChart } from '../components/charts/BarChart';
 import { DonutChart } from '../components/charts/PieChart';
 import { FunnelChart } from '../components/charts/FunnelChart';
 import { DataTable } from '../components/tables/DataTable';
-import { formatCurrency, CHART_COLORS } from '../utils/formatters';
+import { formatCurrency } from '../utils/formatters';
 import {
   useDashboardSummary,
   useRevenueTrends,
@@ -234,7 +234,7 @@ export function Dashboard() {
             yKeys={['revenue']}
             labels={{ revenue: 'Revenue' }}
             height={280}
-            colors={[CHART_COLORS[0]]}
+            colors={['#06B6D4']}
           />
         </ChartCard>
       </div>

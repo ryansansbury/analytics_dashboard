@@ -156,7 +156,7 @@ export function Customers() {
                         key={i}
                         className="px-4 py-3 text-center"
                         style={{
-                          backgroundColor: val > 0 ? `rgba(99, 102, 241, ${val / 100 * 0.5})` : 'transparent',
+                          backgroundColor: val > 0 ? `rgba(6, 182, 212, ${val / 100 * 0.6})` : 'transparent',
                         }}
                       >
                         <span className={val > 0 ? 'text-white' : 'text-gray-600'}>
