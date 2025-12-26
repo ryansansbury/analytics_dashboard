@@ -46,10 +46,13 @@ def get_revenue_forecast():
 
     # Add last few months of actual data
     for i, h in enumerate(historical[-6:]):
+        is_last = (i == len(historical[-6:]) - 1)
+        actual_value = float(h.revenue) if h.revenue else 0
         result.append({
             'date': h.date.strftime('%Y-%m-%d'),
-            'actual': float(h.revenue) if h.revenue else 0,
-            'predicted': None,
+            'actual': actual_value,
+            # Bridge point: last actual also has predicted value to connect the lines
+            'predicted': actual_value if is_last else None,
             'lowerBound': None,
             'upperBound': None,
         })

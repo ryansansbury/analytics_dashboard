@@ -81,7 +81,7 @@ export function BarChart<T extends Record<string, unknown>>({
           fontSize: '12px',
         }}
         labelStyle={{ color: '#9CA3AF' }}
-        cursor={{ fill: 'rgba(55, 65, 81, 0.3)' }}
+        cursor={false}
         formatter={(value, name) => [
           formatTooltip(Number(value) || 0),
           labels[String(name)] || String(name),
@@ -141,7 +141,7 @@ export function BarChart<T extends Record<string, unknown>>({
           fontSize: '12px',
         }}
         labelStyle={{ color: '#9CA3AF' }}
-        cursor={{ fill: 'rgba(55, 65, 81, 0.3)' }}
+        cursor={false}
         formatter={(value, name) => [
           formatTooltip(Number(value) || 0),
           labels[String(name)] || String(name),
