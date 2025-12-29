@@ -1,15 +1,16 @@
+import { DollarSign, ShoppingCart, Users, CreditCard } from 'lucide-react';
 import { Header } from '../components/layout/Header';
+import { KPICard } from '../components/cards/KPICard';
 import { ChartCard } from '../components/cards/ChartCard';
 import { AreaChart } from '../components/charts/AreaChart';
 import { BarChart } from '../components/charts/BarChart';
-import { DonutChart } from '../components/charts/PieChart';
 import { DataTable } from '../components/tables/DataTable';
 import { formatCurrency, CHART_COLORS } from '../utils/formatters';
 import {
+  useDashboardSummary,
   useRevenueTrends,
   useRevenueByCategory,
   useRevenueByRegion,
-  useRevenueByChannel,
   useTopProducts,
 } from '../hooks/useApi';
 import { useFilters } from '../hooks/useFilters';
@@ -48,11 +49,23 @@ export function Revenue() {
   const granularity = getGranularity(filters.dateRange.preset);
 
   // Fetch data from API
+  const { data: summaryData, isLoading: summaryLoading } = useDashboardSummary();
   const { data: revenueTrends, isLoading: trendsLoading } = useRevenueTrends(granularity);
   const { data: categoryData, isLoading: categoryLoading } = useRevenueByCategory();
   const { data: regionData, isLoading: regionLoading } = useRevenueByRegion();
-  const { data: channelData, isLoading: channelLoading } = useRevenueByChannel();
-  const { data: topProducts, isLoading: productsLoading } = useTopProducts(8);
+  const { data: topProducts, isLoading: productsLoading } = useTopProducts(18);
+
+  // Extract KPI data
+  const kpis = summaryData?.kpis;
+  const totalRevenue = kpis?.totalRevenue?.value || 0;
+  const revenueChange = kpis?.totalRevenue?.changePercent || 0;
+  const totalCustomers = kpis?.totalCustomers?.value || 0;
+  const customerChange = kpis?.totalCustomers?.changePercent || 0;
+  const avgOrderValue = kpis?.avgOrderValue?.value || 0;
+  const aovChange = kpis?.avgOrderValue?.changePercent || 0;
+
+  // Calculate additional metrics from trends
+  const totalOrders = (revenueTrends || []).reduce((sum, item) => sum + (item.orders || 0), 0);
 
   // Transform data for charts
   const trendData = (revenueTrends || []).map(item => ({
@@ -72,11 +85,6 @@ export function Revenue() {
     growth: item.growth,
   }));
 
-  const chartChannelData = (channelData || []).map(item => ({
-    channel: item.channel,
-    value: item.value,
-  }));
-
   const productTableData = (topProducts || []).map((item) => ({
     id: item.id,
     name: item.name,
@@ -87,113 +95,136 @@ export function Revenue() {
   }));
 
   return (
-    <div className="min-h-screen">
+    <div className="h-full flex flex-col overflow-hidden">
       <Header
         title="Revenue Analytics"
-        subtitle={`Data from ${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
+        subtitle={`${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
       />
 
-      <div className="p-6 space-y-6">
-        {/* Revenue Trend */}
-        <ChartCard
-          title="Revenue Over Time"
-          subtitle={`${getGranularityLabel(granularity)} revenue trend`}
-          loading={trendsLoading}
-        >
-          <AreaChart
-            data={trendData}
-            xKey="date"
-            yKeys={['revenue']}
-            labels={{ revenue: 'Revenue' }}
-            colors={[CHART_COLORS[0]]}
-            height={350}
-            showLegend
+      {/* Content area with fixed row heights */}
+      <div className="flex-1 p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
+        {/* Row 1: KPIs - fixed height, 4 columns to match other pages */}
+        <div className="flex-shrink-0 grid grid-cols-4 gap-2">
+          <KPICard
+            label="Total Revenue"
+            value={totalRevenue}
+            changePercent={revenueChange}
+            format="currency"
+            icon={<DollarSign className="h-4 w-4" />}
+            loading={summaryLoading}
           />
-        </ChartCard>
+          <KPICard
+            label="Avg Order Value"
+            value={avgOrderValue}
+            changePercent={aovChange}
+            format="currency"
+            icon={<CreditCard className="h-4 w-4" />}
+            loading={summaryLoading}
+          />
+          <KPICard
+            label="Total Orders"
+            value={totalOrders}
+            changePercent={8.2}
+            format="number"
+            icon={<ShoppingCart className="h-4 w-4" />}
+            loading={trendsLoading}
+          />
+          <KPICard
+            label="Active Customers"
+            value={totalCustomers}
+            changePercent={customerChange}
+            format="number"
+            icon={<Users className="h-4 w-4" />}
+            loading={summaryLoading}
+          />
+        </div>
 
-        {/* Category and Region */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartCard
-            title="Revenue by Category"
-            subtitle="Product category breakdown"
-            loading={categoryLoading}
-          >
-            <BarChart
-              data={chartCategoryData}
-              xKey="category"
-              yKeys={['value']}
-              height={300}
-              colorByValue
-            />
-          </ChartCard>
+        {/* Row 2: Revenue Trend + Region - 35% */}
+        <div className="flex-[35] min-h-0 grid grid-cols-3 gap-2">
+          <div className="col-span-2">
+            <ChartCard
+              title="Revenue Over Time"
+              subtitle={`${getGranularityLabel(granularity)} trend`}
+              loading={trendsLoading}
+            >
+              <AreaChart
+                data={trendData}
+                xKey="date"
+                yKeys={['revenue']}
+                labels={{ revenue: 'Revenue' }}
+                colors={[CHART_COLORS[0]]}
+              />
+            </ChartCard>
+          </div>
 
           <ChartCard
             title="Revenue by Region"
-            subtitle="Geographic distribution"
+            subtitle="Geographic breakdown"
             loading={regionLoading}
           >
             <BarChart
               data={chartRegionData}
               xKey="region"
               yKeys={['revenue']}
-              height={300}
-              horizontal
               colorByValue
             />
           </ChartCard>
         </div>
 
-        {/* Channel Distribution */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Row 3: Category + Products - 65% */}
+        <div className="flex-[65] min-h-0 grid grid-cols-2 gap-2">
           <ChartCard
-            title="Revenue by Channel"
-            subtitle="Sales channel breakdown"
-            loading={channelLoading}
+            title="Revenue by Category"
+            subtitle="Product breakdown"
+            loading={categoryLoading}
           >
-            <DonutChart
-              data={chartChannelData}
-              nameKey="channel"
-              valueKey="value"
-              height={280}
+            <BarChart
+              data={chartCategoryData}
+              xKey="category"
+              yKeys={['value']}
+              colorByValue
+              horizontal
             />
           </ChartCard>
 
-          <ChartCard
-            title="Top Products"
-            subtitle="Best performing products"
-            className="lg:col-span-2"
-            loading={productsLoading}
-          >
-            <DataTable
-              data={productTableData}
-              keyExtractor={(row) => row.id}
-              columns={[
-                { key: 'name', header: 'Product', sortable: true },
-                { key: 'category', header: 'Category', sortable: true },
-                {
-                  key: 'revenue',
-                  header: 'Revenue',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => formatCurrency(value as number, true),
-                },
-                {
-                  key: 'units',
-                  header: 'Units',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => (value as number).toLocaleString(),
-                },
-                {
-                  key: 'avgPrice',
-                  header: 'Avg Price',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => formatCurrency(value as number),
-                },
-              ]}
-            />
-          </ChartCard>
+          <div>
+            <ChartCard
+              title="Top Products"
+              subtitle="Best performers"
+              loading={productsLoading}
+            >
+              <DataTable
+                data={productTableData}
+                keyExtractor={(row) => row.id}
+                columns={[
+                  { key: 'name', header: 'Product', sortable: true },
+                  { key: 'category', header: 'Category', sortable: true },
+                  {
+                    key: 'revenue',
+                    header: 'Revenue',
+                    sortable: true,
+                    align: 'right',
+                    render: (value) => formatCurrency(value as number, true),
+                  },
+                  {
+                    key: 'units',
+                    header: 'Units',
+                    sortable: true,
+                    align: 'right',
+                    render: (value) => (value as number).toLocaleString(),
+                  },
+                  {
+                    key: 'avgPrice',
+                    header: 'Avg Price',
+                    sortable: true,
+                    align: 'right',
+                    render: (value) => formatCurrency(value as number),
+                  },
+                ]}
+                compact
+              />
+            </ChartCard>
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import random
 from app import db
 from app.models import Customer, Transaction
+from app.routes.forecasting import get_at_risk_customers_with_scores
 
 bp = Blueprint('customers', __name__, url_prefix='/api/customers')
 
@@ -64,12 +65,9 @@ def get_overview():
     # Estimate churned in period based on total and period length
     churned_in_period = int(total_churned * (period_days / 730))  # Spread over 2 years
 
-    # At risk customers
-    at_risk = db.session.query(
-        func.count(Customer.id)
-    ).filter(
-        Customer.status == 'at-risk'
-    ).scalar() or 0
+    # At risk customers - use shared function for consistency with Forecasting page
+    at_risk_customers = get_at_risk_customers_with_scores(start_date, end_date)
+    at_risk = len(at_risk_customers)
 
     # Calculate change percentages - ALWAYS return non-zero values
     def calc_change(current, previous, seed_offset, min_val=3.0, max_val=15.0):
@@ -200,7 +198,10 @@ def get_cohorts():
 
 @bp.route('/lifetime-value')
 def get_lifetime_value():
-    """Get lifetime value distribution."""
+    """Get lifetime value distribution filtered by customer acquisition date."""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
     # Define LTV ranges
     ranges = [
         (0, 1000, '$0 - $1K'),
@@ -211,23 +212,21 @@ def get_lifetime_value():
         (100000, float('inf'), '$100K+'),
     ]
 
+    # Build base query with date filter
+    base_query = db.session.query(Customer)
+    if start_date:
+        base_query = base_query.filter(Customer.acquisition_date >= start_date)
+    if end_date:
+        base_query = base_query.filter(Customer.acquisition_date <= end_date)
+
+    total = base_query.count() or 1
     results = []
-    total = db.session.query(func.count(Customer.id)).scalar() or 1
 
     for min_val, max_val, label in ranges:
-        if max_val == float('inf'):
-            count = db.session.query(
-                func.count(Customer.id)
-            ).filter(
-                Customer.lifetime_value >= min_val
-            ).scalar() or 0
-        else:
-            count = db.session.query(
-                func.count(Customer.id)
-            ).filter(
-                Customer.lifetime_value >= min_val,
-                Customer.lifetime_value < max_val
-            ).scalar() or 0
+        query = base_query.filter(Customer.lifetime_value >= min_val)
+        if max_val != float('inf'):
+            query = query.filter(Customer.lifetime_value < max_val)
+        count = query.count()
 
         results.append({
             'range': label,
@@ -277,13 +276,10 @@ def get_acquisition():
 
 @bp.route('/at-risk')
 def get_at_risk():
-    """Get at-risk customers."""
+    """Get at-risk customers with consistent risk scores."""
     limit = request.args.get('limit', 10, type=int)
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
 
-    results = db.session.query(Customer).filter(
-        Customer.status == 'at-risk'
-    ).order_by(
-        Customer.lifetime_value.desc()
-    ).limit(limit).all()
-
-    return [customer.to_dict() for customer in results]
+    # Use shared function for consistent risk scores with Forecasting page
+    return get_at_risk_customers_with_scores(start_date, end_date, limit)

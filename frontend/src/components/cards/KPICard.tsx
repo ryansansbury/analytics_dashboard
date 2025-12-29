@@ -17,8 +17,8 @@ interface KPICardProps {
 export function KPICard({
   label,
   value,
-  previousValue,
-  change,
+  previousValue: _previousValue,
+  change: _change,
   changePercent,
   format = 'number',
   icon,
@@ -66,21 +66,17 @@ export function KPICard({
     return (
       <div
         className={clsx(
-          'bg-gray-900 rounded-xl border border-gray-800 p-6',
+          'bg-gray-900 rounded-lg border border-gray-800 px-3 py-2',
           className
         )}
       >
-        <div className="flex items-start justify-between mb-4">
-          <div className="h-4 w-24 bg-gray-800 rounded animate-pulse" />
-          {icon && (
-            <div className="p-2 bg-gray-800 rounded-lg">
-              <div className="h-5 w-5 bg-gray-700 rounded animate-pulse" />
-            </div>
-          )}
-        </div>
-        <div className="space-y-2">
-          <div className="h-9 w-32 bg-gray-800 rounded animate-pulse" />
-          <div className="h-5 w-24 bg-gray-800 rounded animate-pulse" />
+        <div className="flex items-center gap-3">
+          <div className="h-4 w-4 bg-gray-800 rounded animate-pulse flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="h-3 w-16 bg-gray-800 rounded animate-pulse mb-1" />
+            <div className="h-5 w-20 bg-gray-800 rounded animate-pulse" />
+          </div>
+          <div className="h-4 w-12 bg-gray-800 rounded animate-pulse" />
         </div>
       </div>
     );
@@ -89,46 +85,33 @@ export function KPICard({
   return (
     <div
       className={clsx(
-        'bg-gray-900 rounded-xl border border-gray-800 p-6 card-hover',
+        'bg-gray-900 rounded-lg border border-gray-800 px-3 py-2 card-hover',
         className
       )}
     >
-      <div className="flex items-start justify-between mb-4">
-        <span className="text-sm font-medium text-gray-400">{label}</span>
+      <div className="flex items-center gap-3">
         {icon && (
-          <div className="p-2 bg-primary-500/10 rounded-lg text-primary-500">
+          <div className="p-1.5 bg-primary-500/10 rounded-md text-primary-500 flex-shrink-0">
             {icon}
           </div>
         )}
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-3xl font-bold text-white tabular-nums">
-          {formattedValue}
-        </p>
-
-        {changePercent !== undefined && (
-          <div className="flex items-center gap-2">
-            <span
-              className={clsx(
-                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-                trendBg,
-                trendColor
-              )}
-            >
-              <TrendIcon className="h-3 w-3" />
-              {formatPercent(Math.abs(changePercent))}
-            </span>
-            <span className="text-xs text-gray-500">vs previous period</span>
-          </div>
-        )}
-
-        {previousValue !== undefined && change !== undefined && (
-          <p className="text-xs text-gray-500">
-            Previous: {format === 'currency' ? formatCurrency(previousValue, true) : formatNumber(previousValue, true)}
-            {' '}
-            ({change >= 0 ? '+' : ''}{format === 'currency' ? formatCurrency(change, true) : formatNumber(change, true)})
+        <div className="flex-1">
+          <span className="text-xs font-medium text-gray-400 block">{label}</span>
+          <p className="text-lg font-bold text-white tabular-nums">
+            {formattedValue}
           </p>
+        </div>
+        {changePercent !== undefined && (
+          <span
+            className={clsx(
+              'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0',
+              trendBg,
+              trendColor
+            )}
+          >
+            <TrendIcon className="h-3 w-3" />
+            {formatPercent(Math.abs(changePercent))}
+          </span>
         )}
       </div>
     </div>
@@ -144,7 +127,7 @@ export function KPIGrid({ children, className }: KPIGridProps) {
   return (
     <div
       className={clsx(
-        'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4',
+        'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2',
         className
       )}
     >

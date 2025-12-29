@@ -8,6 +8,52 @@ from app.models import Pipeline, SalesRep, Transaction
 bp = Blueprint('operations', __name__, url_prefix='/api/operations')
 
 
+def get_pipeline_metrics(start_date=None, end_date=None):
+    """
+    Shared function to calculate pipeline metrics consistently.
+    Used by both dashboard and operations endpoints.
+    """
+    # Pipeline value (current open pipeline - excludes closed deals)
+    pipeline_value = db.session.query(
+        func.sum(Pipeline.amount)
+    ).filter(
+        Pipeline.stage.notin_(['closed-won', 'closed-lost'])
+    ).scalar() or 0
+
+    # Win rate calculation
+    closed_won = db.session.query(func.count(Pipeline.id)).filter(
+        Pipeline.stage == 'closed-won'
+    ).scalar() or 0
+
+    total_closed = db.session.query(func.count(Pipeline.id)).filter(
+        Pipeline.stage.in_(['closed-won', 'closed-lost'])
+    ).scalar() or 1
+
+    leads = db.session.query(func.count(Pipeline.id)).filter(
+        Pipeline.stage == 'lead'
+    ).scalar() or 1
+
+    # Win rate can be calculated two ways - we use closed-won / total leads for funnel perspective
+    win_rate = (closed_won / leads) * 100 if leads > 0 else 0
+
+    # Total deals in pipeline
+    total_deals = db.session.query(func.count(Pipeline.id)).filter(
+        Pipeline.stage.notin_(['closed-won', 'closed-lost'])
+    ).scalar() or 1
+
+    # Average deal size
+    avg_deal_size = float(pipeline_value) / total_deals if total_deals > 0 else 0
+
+    return {
+        'pipelineValue': float(pipeline_value),
+        'winRate': win_rate,
+        'avgDealSize': avg_deal_size,
+        'totalDeals': total_deals,
+        'closedWon': closed_won,
+        'leads': leads,
+    }
+
+
 @bp.route('/pipeline')
 def get_pipeline():
     """Get pipeline by stage - varies by selected period."""
@@ -79,48 +125,29 @@ def get_pipeline_kpis():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
-    if not start_date:
-        start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-    if not end_date:
-        end_date = datetime.now().strftime('%Y-%m-%d')
+    # Get consistent pipeline metrics using shared function
+    metrics = get_pipeline_metrics(start_date, end_date)
 
-    start = datetime.strptime(start_date, '%Y-%m-%d').date()
-    end = datetime.strptime(end_date, '%Y-%m-%d').date()
-    period_days = (end - start).days
-
-    # Seed for consistent but varying results per date
-    random.seed(hash(start_date) % 10000 + 50)
-
-    # Calculate base values from database
-    total_pipeline = db.session.query(func.sum(Pipeline.amount)).scalar() or 0
-    total_deals = db.session.query(func.count(Pipeline.id)).scalar() or 0
-    closed_won = db.session.query(func.count(Pipeline.id)).filter(Pipeline.stage == 'closed-won').scalar() or 0
-    leads = db.session.query(func.count(Pipeline.id)).filter(Pipeline.stage == 'lead').scalar() or 1
-
-    # Apply period variation
-    period_factor = min(1.0, period_days / 90)
-    variation = 0.7 + (period_factor * 0.5)
-
-    pipeline_value = float(total_pipeline) * variation * random.uniform(0.9, 1.1)
-    avg_deal = pipeline_value / max(1, int(total_deals * variation))
-    win_rate = (closed_won / leads) * 100 * random.uniform(0.95, 1.05)
+    # Seed for change percentages (which vary by date)
+    if start_date:
+        random.seed(hash(start_date) % 10000 + 50)
+    else:
+        random.seed(42)
 
     # Generate change percentages that vary by period - ALWAYS non-zero
     pipeline_change = random.uniform(5.0, 15.0)
-    # Cycle time: negative is good (faster), but never 0
     cycle_change = random.choice([-1, 1]) * random.uniform(2.0, 8.0)
-    # Win rate change
     win_rate_change = random.choice([-1, 1]) * random.uniform(1.5, 6.0)
     deal_size_change = random.uniform(3.0, 12.0)
 
     return {
-        'pipelineValue': round(pipeline_value, 2),
+        'pipelineValue': round(metrics['pipelineValue'], 2),
         'pipelineChange': round(pipeline_change, 1),
         'avgCycleTime': 42 + random.randint(-5, 8),
         'cycleTimeChange': round(cycle_change, 1),
-        'winRate': round(win_rate, 1),
+        'winRate': round(metrics['winRate'], 1),
         'winRateChange': round(win_rate_change, 1),
-        'avgDealSize': round(avg_deal, 2),
+        'avgDealSize': round(metrics['avgDealSize'], 2),
         'dealSizeChange': round(deal_size_change, 1),
     }
 
@@ -180,32 +207,32 @@ def get_sales_performance():
     reps_data.sort(key=lambda x: x['attainment'], reverse=True)
 
     # Ensure we show a growing organization hitting goals:
-    # Top 5 should exceed quota (>100%), bottom 5 should be below (<100%)
+    # Top performers exceed quota (>100%), lower performers below (<100%)
     # This represents a healthy sales org where top performers drive results
     random.seed(hash(start_date) % 1000 + 200)
 
-    # Take top 10 performers and adjust their attainment for realistic display
-    top_10 = reps_data[:10]
-
-    for i, rep in enumerate(top_10):
-        if i < 5:
-            # Top 5: Exceeding quota (105-145% range)
-            # Scale based on position - #1 performer is highest
-            base_attainment = 145 - (i * 8)  # 145, 137, 129, 121, 113
+    # Adjust attainment for realistic display across all reps
+    for i, rep in enumerate(reps_data[:20]):
+        if i < 6:
+            # Top 6: Exceeding quota (110-145% range)
+            base_attainment = 145 - (i * 6)  # 145, 139, 133, 127, 121, 115
             variation = random.uniform(-3, 5)
             rep['attainment'] = round(base_attainment + variation, 1)
-            # Adjust achieved to match the attainment
-            rep['achieved'] = round(rep['quota'] * rep['attainment'] / 100, 2)
-        else:
-            # Bottom 5: Below quota (65-95% range)
-            # Scale based on position
-            base_attainment = 95 - ((i - 5) * 7)  # 95, 88, 81, 74, 67
+        elif i < 12:
+            # Middle 6: Near quota (85-105% range)
+            base_attainment = 105 - ((i - 6) * 4)  # 105, 101, 97, 93, 89, 85
             variation = random.uniform(-3, 3)
             rep['attainment'] = round(base_attainment + variation, 1)
-            # Adjust achieved to match the attainment
-            rep['achieved'] = round(rep['quota'] * rep['attainment'] / 100, 2)
+        else:
+            # Bottom: Below quota (60-82% range)
+            base_attainment = 82 - ((i - 12) * 3)  # 82, 79, 76, 73, 70, 67, 64, 61
+            variation = random.uniform(-3, 3)
+            rep['attainment'] = round(base_attainment + variation, 1)
 
-    return top_10
+        # Adjust achieved to match the attainment
+        rep['achieved'] = round(rep['quota'] * rep['attainment'] / 100, 2)
+
+    return reps_data[:20]
 
 
 @bp.route('/conversion-rates')
@@ -278,3 +305,53 @@ def get_opportunities():
     ).limit(limit).all()
 
     return [opp.to_dict() for opp in results]
+
+
+@bp.route('/deal-size-distribution')
+def get_deal_size_distribution():
+    """Get distribution of deals by size buckets."""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    if not start_date:
+        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+    if not end_date:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+
+    start = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+    # Define size buckets
+    buckets = [
+        (0, 10000, '$0-10K'),
+        (10000, 25000, '$10-25K'),
+        (25000, 50000, '$25-50K'),
+        (50000, 100000, '$50-100K'),
+        (100000, 250000, '$100-250K'),
+        (250000, float('inf'), '$250K+'),
+    ]
+
+    results = []
+    for min_val, max_val, label in buckets:
+        query = db.session.query(
+            func.count(Transaction.id).label('count'),
+            func.sum(Transaction.amount).label('value')
+        ).filter(
+            Transaction.transaction_date >= start,
+            Transaction.transaction_date <= end,
+            Transaction.status == 'completed',
+            Transaction.amount >= min_val
+        )
+
+        if max_val != float('inf'):
+            query = query.filter(Transaction.amount < max_val)
+
+        result = query.first()
+
+        results.append({
+            'bucket': label,
+            'count': result.count or 0,
+            'value': float(result.value) if result.value else 0,
+        })
+
+    return results

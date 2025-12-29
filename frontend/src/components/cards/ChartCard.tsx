@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import clsx from 'clsx';
 import { Loading } from '../common/Loading';
 import { ErrorMessage } from '../common/ErrorBoundary';
+import { useContainerSize } from '../../hooks/useContainerSize';
 
 interface ChartCardProps {
   title: string;
@@ -26,38 +27,45 @@ export function ChartCard({
   className,
   noPadding = false,
 }: ChartCardProps) {
+  const [containerRef, containerSize] = useContainerSize<HTMLDivElement>();
+
   return (
     <div
       className={clsx(
-        'bg-gray-900 rounded-xl border border-gray-800',
+        'bg-gray-900 rounded-lg border border-gray-800 flex flex-col h-full overflow-hidden',
         className
       )}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-        <div>
-          <h3 className="text-base font-semibold text-white">{title}</h3>
+      {/* Header - fixed height */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-800 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
           {subtitle && (
-            <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+            <p className="text-xs text-gray-500">· {subtitle}</p>
           )}
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && <div className="flex items-center gap-1">{actions}</div>}
       </div>
 
-      {/* Content */}
-      <div className={clsx(!noPadding && 'p-6')}>
+      {/* Content - fills remaining space */}
+      <div
+        ref={containerRef}
+        className={clsx('flex-1 min-h-0', !noPadding && 'p-2')}
+      >
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loading text="Loading data..." />
+          <div className="flex items-center justify-center h-full">
+            <Loading text="Loading..." />
           </div>
         ) : error ? (
           <ErrorMessage
             message={error.message}
             onRetry={onRetry}
           />
-        ) : (
-          children
-        )}
+        ) : containerSize.height > 0 ? (
+          <div style={{ width: '100%', height: containerSize.height - (noPadding ? 0 : 16) }}>
+            {children}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -78,7 +86,7 @@ interface StatCardProps {
 export function StatCard({
   title,
   value,
-  subtitle,
+  subtitle: _subtitle,
   trend,
   icon,
   className,
@@ -94,26 +102,23 @@ export function StatCard({
   return (
     <div
       className={clsx(
-        'bg-gray-900 rounded-xl border border-gray-800 p-5',
+        'bg-gray-900 rounded-lg border border-gray-800 px-3 py-2',
         className
       )}
     >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-400 mb-1">{title}</p>
-          <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
-          {subtitle && (
-            <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-          )}
-          {trend && (
-            <p className={clsx('text-xs mt-2', trendColor)}>
-              {trend.value > 0 ? '↑' : trend.value < 0 ? '↓' : '→'}{' '}
-              {Math.abs(trend.value).toFixed(1)}% {trend.label}
-            </p>
-          )}
-        </div>
+      <div className="flex items-center gap-2">
         {icon && (
-          <div className="p-2 bg-gray-800 rounded-lg text-gray-400">{icon}</div>
+          <div className="p-1.5 bg-gray-800 rounded-md text-gray-400 flex-shrink-0">{icon}</div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-gray-400">{title}</p>
+          <p className="text-lg font-bold text-white tabular-nums">{value}</p>
+        </div>
+        {trend && (
+          <span className={clsx('text-xs font-medium flex-shrink-0', trendColor)}>
+            {trend.value > 0 ? '↑' : trend.value < 0 ? '↓' : '→'}{' '}
+            {Math.abs(trend.value).toFixed(1)}%
+          </span>
         )}
       </div>
     </div>

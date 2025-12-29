@@ -201,9 +201,39 @@ export function useAtRiskCustomers(
   limit = 10,
   options?: Omit<UseQueryOptions<Customer[]>, 'queryKey' | 'queryFn'>
 ) {
+  const { filters } = useFilters();
+
   return useQuery({
-    queryKey: ['customers', 'at-risk', limit],
-    queryFn: () => customerApi.getAtRisk(limit),
+    queryKey: ['customers', 'at-risk', limit, filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => customerApi.getAtRisk(limit, filters.dateRange),
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
+export function useLifetimeValue(
+  options?: Omit<UseQueryOptions<{ range: string; count: number; percentage: number }[]>, 'queryKey' | 'queryFn'>
+) {
+  const { filters } = useFilters();
+
+  return useQuery({
+    queryKey: ['customers', 'lifetime-value', filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => customerApi.getLifetimeValue(filters.dateRange),
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
+export function useCustomerAcquisition(
+  options?: Omit<UseQueryOptions<{ date: string; channel: string; count: number }[]>, 'queryKey' | 'queryFn'>
+) {
+  const { filters } = useFilters();
+
+  return useQuery({
+    queryKey: ['customers', 'acquisition', filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => customerApi.getAcquisition(filters.dateRange),
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,
@@ -279,6 +309,20 @@ export function usePipelineKpis(
   });
 }
 
+export function useDealSizeDistribution(
+  options?: Omit<UseQueryOptions<{ bucket: string; count: number; value: number }[]>, 'queryKey' | 'queryFn'>
+) {
+  const { filters } = useFilters();
+
+  return useQuery({
+    queryKey: ['operations', 'deal-size-distribution', filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => operationsApi.getDealSizeDistribution(filters.dateRange),
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
 // Forecasting hooks
 export function useRevenueForecast(
   periods = 6,
@@ -343,6 +387,53 @@ export function useForecastingKpis(
   return useQuery({
     queryKey: ['forecasting', 'kpis', filters.dateRange.startDate, filters.dateRange.endDate],
     queryFn: () => forecastingApi.getKpis(filters.dateRange),
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
+export function useModelPerformance(
+  options?: Omit<
+    UseQueryOptions<{
+      accuracy: number;
+      mape: number;
+      r2Score: number;
+      rmse: number;
+      dataPoints: string;
+      lastUpdate: string;
+      confidence: number;
+    }>,
+    'queryKey' | 'queryFn'
+  >
+) {
+  const { filters } = useFilters();
+
+  return useQuery({
+    queryKey: ['forecasting', 'model-performance', filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => forecastingApi.getModelPerformance(filters.dateRange),
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+    ...options,
+  });
+}
+
+export function useRevenueAtRisk(
+  options?: Omit<
+    UseQueryOptions<{
+      highRisk: { value: number; customers: number; label: string; threshold: string };
+      mediumRisk: { value: number; customers: number; label: string; threshold: string };
+      lowRisk: { value: number; customers: number; label: string; threshold: string };
+      total: number;
+    }>,
+    'queryKey' | 'queryFn'
+  >
+) {
+  const { filters } = useFilters();
+
+  return useQuery({
+    queryKey: ['forecasting', 'revenue-at-risk', filters.dateRange.startDate, filters.dateRange.endDate],
+    queryFn: () => forecastingApi.getRevenueAtRisk(filters.dateRange),
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
     ...options,

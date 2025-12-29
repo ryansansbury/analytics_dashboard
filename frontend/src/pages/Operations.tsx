@@ -4,9 +4,10 @@ import { KPICard } from '../components/cards/KPICard';
 import { ChartCard } from '../components/cards/ChartCard';
 import { BarChart } from '../components/charts/BarChart';
 import { FunnelChart } from '../components/charts/FunnelChart';
+import { DonutChart } from '../components/charts/PieChart';
 import { DataTable } from '../components/tables/DataTable';
 import { formatCurrency } from '../utils/formatters';
-import { usePipeline, useSalesPerformance, useCycleTime, usePipelineKpis } from '../hooks/useApi';
+import { usePipeline, useSalesPerformance, useCycleTime, usePipelineKpis, useDealSizeDistribution } from '../hooks/useApi';
 import { useFilters } from '../hooks/useFilters';
 
 export function Operations() {
@@ -17,6 +18,7 @@ export function Operations() {
   const { data: pipelineKpis, isLoading: kpisLoading } = usePipelineKpis();
   const { data: salesReps, isLoading: salesLoading } = useSalesPerformance();
   const { data: cycleTimeData } = useCycleTime();
+  const { data: dealSizeData, isLoading: dealSizeLoading } = useDealSizeDistribution();
 
   // Transform pipeline data for funnel
   const funnelData = (pipelineData || []).map((item, index, arr) => ({
@@ -26,17 +28,11 @@ export function Operations() {
     conversionRate: index === 0 ? 100 : Math.round((item.count / arr[0].count) * 100),
   }));
 
-  // Calculate conversion rates from pipeline
-  const conversionRates = [];
-  for (let i = 0; i < funnelData.length - 1; i++) {
-    const fromStage = funnelData[i];
-    const toStage = funnelData[i + 1];
-    const rate = fromStage.count > 0 ? (toStage.count / fromStage.count) * 100 : 0;
-    conversionRates.push({
-      fromStage: `${fromStage.stage} to ${toStage.stage}`,
-      rate: Math.round(rate * 10) / 10,
-    });
-  }
+  // Transform deal size data for histogram
+  const dealSizeDistribution = (dealSizeData || []).map(item => ({
+    bucket: item.bucket,
+    count: item.count,
+  }));
 
   // Use cycle time from API
   const cycleData = cycleTimeData || [
@@ -46,8 +42,8 @@ export function Operations() {
     { stage: 'Negotiation to Close', avgDays: 7 },
   ];
 
-  // Transform sales reps data (take top 10)
-  const salesRepsData = (salesReps || []).slice(0, 10).map(rep => ({
+  // Transform sales reps data (take top 20)
+  const salesRepsData = (salesReps || []).slice(0, 20).map(rep => ({
     id: rep.id,
     name: rep.name,
     team: rep.team,
@@ -59,21 +55,22 @@ export function Operations() {
   }));
 
   return (
-    <div className="min-h-screen">
+    <div className="h-full flex flex-col overflow-hidden">
       <Header
         title="Operations"
-        subtitle={`Data from ${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
+        subtitle={`${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
       />
 
-      <div className="p-6 space-y-6">
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Content area with fixed row heights */}
+      <div className="flex-1 p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
+        {/* Row 1: KPIs - fixed height */}
+        <div className="flex-shrink-0 grid grid-cols-4 gap-2">
           <KPICard
             label="Pipeline Value"
             value={pipelineKpis?.pipelineValue || 32000000}
             changePercent={pipelineKpis?.pipelineChange || 8.5}
             format="currency"
-            icon={<TrendingUp className="h-5 w-5" />}
+            icon={<TrendingUp className="h-4 w-4" />}
             loading={kpisLoading}
           />
           <KPICard
@@ -81,7 +78,7 @@ export function Operations() {
             value={pipelineKpis?.avgCycleTime || 42}
             changePercent={pipelineKpis?.cycleTimeChange || -3.2}
             format="number"
-            icon={<Clock className="h-5 w-5" />}
+            icon={<Clock className="h-4 w-4" />}
             loading={kpisLoading}
           />
           <KPICard
@@ -89,7 +86,7 @@ export function Operations() {
             value={pipelineKpis?.winRate || 12.5}
             changePercent={pipelineKpis?.winRateChange || 2.8}
             format="percent"
-            icon={<Trophy className="h-5 w-5" />}
+            icon={<Trophy className="h-4 w-4" />}
             loading={kpisLoading}
           />
           <KPICard
@@ -97,90 +94,88 @@ export function Operations() {
             value={pipelineKpis?.avgDealSize || 85000}
             changePercent={pipelineKpis?.dealSizeChange || 5.5}
             format="currency"
-            icon={<Target className="h-5 w-5" />}
+            icon={<Target className="h-4 w-4" />}
             loading={kpisLoading}
           />
         </div>
 
-        {/* Pipeline and Conversion */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartCard title="Sales Pipeline" subtitle="Opportunity value by stage" loading={pipelineLoading}>
-            <FunnelChart data={funnelData} height={320} />
+        {/* Row 2: Pipeline, Conversion, Cycle Time - 45% */}
+        <div className="flex-[45] min-h-0 grid grid-cols-3 gap-2">
+          <ChartCard title="Sales Pipeline" subtitle="By stage" loading={pipelineLoading}>
+            <FunnelChart data={funnelData} />
           </ChartCard>
 
-          <ChartCard title="Stage Conversion Rates" subtitle="Conversion percentage between stages" loading={pipelineLoading}>
+          <ChartCard title="Deal Size Distribution" subtitle="Transaction count by size" loading={dealSizeLoading}>
+            <DonutChart
+              data={dealSizeDistribution}
+              nameKey="bucket"
+              valueKey="count"
+              formatValue="number"
+            />
+          </ChartCard>
+
+          <ChartCard title="Deal Cycle Time" subtitle="Avg days per stage">
             <BarChart
-              data={conversionRates}
-              xKey="fromStage"
-              yKeys={['rate']}
-              formatY="percent"
-              height={320}
-              horizontal
-              colorByValue
+              data={cycleData}
+              xKey="stage"
+              yKeys={['avgDays']}
+              formatY="number"
+              labels={{ avgDays: 'Days' }}
+              colors={['#3B82F6']}
             />
           </ChartCard>
         </div>
 
-        {/* Cycle Time */}
-        <ChartCard title="Deal Cycle Time" subtitle="Average days spent in each stage">
-          <BarChart
-            data={cycleData}
-            xKey="stage"
-            yKeys={['avgDays']}
-            formatY="number"
-            labels={{ avgDays: 'Days' }}
-            height={250}
-            colors={['#06B6D4']}
-          />
-        </ChartCard>
-
-        {/* Sales Rep Performance */}
-        <ChartCard
-          title="Sales Team Performance"
-          subtitle="Quota attainment for selected period"
-          loading={salesLoading}
-        >
-          <DataTable
-            data={salesRepsData}
-            keyExtractor={(row) => row.id}
-            columns={[
-              { key: 'name', header: 'Sales Rep', sortable: true },
-              { key: 'team', header: 'Team', sortable: true },
-              { key: 'region', header: 'Region', sortable: true },
-              {
-                key: 'quota',
-                header: 'Annual Quota',
-                sortable: true,
-                align: 'right',
-                render: (value) => formatCurrency(value as number, true),
-              },
-              {
-                key: 'achieved',
-                header: 'Achieved',
-                sortable: true,
-                align: 'right',
-                render: (value) => formatCurrency(value as number, true),
-              },
-              {
-                key: 'deals',
-                header: 'Deals',
-                sortable: true,
-                align: 'right',
-              },
-              {
-                key: 'attainment',
-                header: 'Attainment',
-                sortable: true,
-                align: 'right',
-                render: (value) => {
-                  const v = value as number;
-                  const color = v >= 100 ? 'text-success' : v >= 80 ? 'text-warning' : 'text-danger';
-                  return <span className={`font-medium ${color}`}>{v.toFixed(1)}%</span>;
+        {/* Row 3: Sales Team Performance - 55% */}
+        <div className="flex-[55] min-h-0">
+          <ChartCard
+            title="Sales Team Performance"
+            subtitle="Quota attainment"
+            loading={salesLoading}
+          >
+            <DataTable
+              data={salesRepsData}
+              keyExtractor={(row) => row.id}
+              columns={[
+                { key: 'name', header: 'Sales Rep', sortable: true },
+                { key: 'team', header: 'Team', sortable: true },
+                { key: 'region', header: 'Region', sortable: true },
+                {
+                  key: 'quota',
+                  header: 'Quota',
+                  sortable: true,
+                  align: 'right',
+                  render: (value) => formatCurrency(value as number, true),
                 },
-              },
-            ]}
-          />
-        </ChartCard>
+                {
+                  key: 'achieved',
+                  header: 'Achieved',
+                  sortable: true,
+                  align: 'right',
+                  render: (value) => formatCurrency(value as number, true),
+                },
+                {
+                  key: 'deals',
+                  header: 'Deals',
+                  sortable: true,
+                  align: 'right',
+                },
+                {
+                  key: 'attainment',
+                  header: '%',
+                  sortable: true,
+                  align: 'right',
+                  render: (value) => {
+                    const v = value as number;
+                    const color = v >= 100 ? 'text-success' : v >= 80 ? 'text-warning' : 'text-danger';
+                    return <span className={`font-medium ${color}`}>{v.toFixed(0)}%</span>;
+                  },
+                },
+              ]}
+              compact
+            />
+          </ChartCard>
+        </div>
       </div>
     </div>
   );

@@ -21,6 +21,7 @@ import os
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import config
 
@@ -56,6 +57,9 @@ def create_app(config_name: str = None) -> Flask:
 
     app = Flask(__name__, static_folder=static_folder if has_static else None)
     app.config.from_object(config[config_name])
+
+    # Trust proxy headers (Railway, Heroku, etc.) for proper HTTPS handling
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     # Initialize extensions
     db.init_app(app)

@@ -18,8 +18,9 @@ A full-stack business intelligence dashboard featuring real-time KPI tracking, i
 - **Top Products** - Sortable table of best-performing products
 
 ### Revenue Analytics
-- Detailed revenue breakdowns by category, region, and channel
+- Detailed revenue breakdowns by category and region
 - Period-over-period comparisons with change percentages
+- Top products performance table
 - Interactive bar and area charts with date range filtering
 
 ### Customer Intelligence
@@ -169,6 +170,8 @@ All endpoints support `start_date` and `end_date` query parameters (YYYY-MM-DD f
 - `GET /api/forecasting/churn-risk` - At-risk customers with recommendations
 - `GET /api/forecasting/seasonality` - Monthly seasonality indices
 - `GET /api/forecasting/kpis` - Forecasting KPIs (predicted revenue, accuracy)
+- `GET /api/forecasting/model-performance` - ML model accuracy metrics
+- `GET /api/forecasting/revenue-at-risk` - Revenue at risk by category
 
 ## Project Structure
 

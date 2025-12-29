@@ -132,16 +132,16 @@ export function tooltipPercentFormatter(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
-// Color helpers
+// Color helpers - Blue-focused palette with diverse accent colors
 export const CHART_COLORS = [
-  '#6366F1', // Indigo
-  '#8B5CF6', // Purple
-  '#06B6D4', // Cyan
-  '#F59E0B', // Amber
-  '#10B981', // Emerald
   '#3B82F6', // Blue
-  '#F97316', // Orange
+  '#06B6D4', // Cyan/Teal
+  '#10B981', // Emerald
+  '#F59E0B', // Amber/Yellow
+  '#EF4444', // Red
+  '#8B5CF6', // Violet
   '#14B8A6', // Teal
+  '#F97316', // Orange
 ];
 
 export function getChartColor(index: number): string {

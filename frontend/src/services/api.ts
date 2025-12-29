@@ -170,9 +170,12 @@ export const customerApi = {
       })}`
     ),
 
-  getLifetimeValue: () =>
+  getLifetimeValue: (dateRange?: DateRange) =>
     fetchApi<{ range: string; count: number; percentage: number }[]>(
-      '/customers/lifetime-value'
+      `/customers/lifetime-value${buildQueryString({
+        start_date: dateRange?.startDate,
+        end_date: dateRange?.endDate,
+      })}`
     ),
 
   getAcquisition: (dateRange: DateRange) =>
@@ -183,8 +186,12 @@ export const customerApi = {
       })}`
     ),
 
-  getAtRisk: (limit = 10) =>
-    fetchApi<Customer[]>(`/customers/at-risk${buildQueryString({ limit })}`),
+  getAtRisk: (limit = 10, dateRange?: DateRange) =>
+    fetchApi<Customer[]>(`/customers/at-risk${buildQueryString({
+      limit,
+      start_date: dateRange?.startDate,
+      end_date: dateRange?.endDate,
+    })}`),
 };
 
 // Operations API
@@ -231,6 +238,14 @@ export const operationsApi = {
     fetchApi<{ stage: string; avgDays: number }[]>(
       `/operations/cycle-time${buildQueryString({
         start_date: dateRange.startDate,
+      })}`
+    ),
+
+  getDealSizeDistribution: (dateRange: DateRange) =>
+    fetchApi<{ bucket: string; count: number; value: number }[]>(
+      `/operations/deal-size-distribution${buildQueryString({
+        start_date: dateRange.startDate,
+        end_date: dateRange.endDate,
       })}`
     ),
 
@@ -287,6 +302,35 @@ export const forecastingApi = {
       forecastPeriod: number;
     }>(
       `/forecasting/kpis${buildQueryString({
+        start_date: dateRange?.startDate,
+        end_date: dateRange?.endDate,
+      })}`
+    ),
+
+  getModelPerformance: (dateRange?: DateRange) =>
+    fetchApi<{
+      accuracy: number;
+      mape: number;
+      r2Score: number;
+      rmse: number;
+      dataPoints: string;
+      lastUpdate: string;
+      confidence: number;
+    }>(
+      `/forecasting/model-performance${buildQueryString({
+        start_date: dateRange?.startDate,
+        end_date: dateRange?.endDate,
+      })}`
+    ),
+
+  getRevenueAtRisk: (dateRange?: DateRange) =>
+    fetchApi<{
+      highRisk: { value: number; customers: number; label: string; threshold: string };
+      mediumRisk: { value: number; customers: number; label: string; threshold: string };
+      lowRisk: { value: number; customers: number; label: string; threshold: string };
+      total: number;
+    }>(
+      `/forecasting/revenue-at-risk${buildQueryString({
         start_date: dateRange?.startDate,
         end_date: dateRange?.endDate,
       })}`

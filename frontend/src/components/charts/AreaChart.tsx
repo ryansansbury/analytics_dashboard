@@ -17,12 +17,13 @@ interface AreaChartProps<T> {
   yKeys: (keyof T)[];
   labels?: Record<string, string>;
   colors?: string[];
-  height?: number;
+  height?: number | '100%';
   showGrid?: boolean;
   showLegend?: boolean;
   formatY?: 'currency' | 'number' | 'percent';
   stacked?: boolean;
   gradient?: boolean;
+  dashedKeys?: (keyof T)[];
 }
 
 export function AreaChart<T extends Record<string, unknown>>({
@@ -31,19 +32,24 @@ export function AreaChart<T extends Record<string, unknown>>({
   yKeys,
   labels = {},
   colors = CHART_COLORS,
-  height = 300,
+  height = '100%',
   showGrid = true,
   showLegend = false,
   formatY = 'currency',
   stacked = false,
   gradient = true,
+  dashedKeys = [],
 }: AreaChartProps<T>) {
   const formatYAxis = formatY === 'currency' ? currencyAxisFormatter : (v: number) => v.toLocaleString();
   const formatTooltip = formatY === 'currency' ? formatCurrency : (v: number) => v.toLocaleString();
 
+  // Calculate interval for X-axis labels to prevent overlap
+  // Show fewer labels when there are many data points
+  const xAxisInterval = data.length > 20 ? Math.ceil(data.length / 10) - 1 : 0;
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <RechartsAreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+      <RechartsAreaChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
         <defs>
           {yKeys.map((key, index) => (
             <linearGradient
@@ -75,11 +81,11 @@ export function AreaChart<T extends Record<string, unknown>>({
         <XAxis
           dataKey={String(xKey)}
           stroke="#6B7280"
-          fontSize={12}
+          fontSize={10}
           tickLine={false}
           axisLine={false}
           tickFormatter={(value) => formatDateShort(value)}
-          interval={1}
+          interval={xAxisInterval}
         />
 
         <YAxis
@@ -121,6 +127,7 @@ export function AreaChart<T extends Record<string, unknown>>({
             stackId={stacked ? 'stack' : undefined}
             stroke={colors[index % colors.length]}
             strokeWidth={2}
+            strokeDasharray={dashedKeys.includes(key) ? '5 5' : undefined}
             fill={gradient ? `url(#gradient-${String(key)})` : colors[index % colors.length]}
             fillOpacity={gradient ? 1 : 0.1}
           />

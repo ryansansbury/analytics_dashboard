@@ -35,43 +35,43 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-64'
       )}
     >
-      {/* Logo - matches main header height (py-4 + content) */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-800">
+      {/* Logo - matches main header height h-12 */}
+      <div className="flex items-center justify-between px-4 h-12 border-b border-gray-800">
         {!collapsed && (
-          <span className="text-xl font-bold text-white leading-8">Analytics</span>
+          <span className="text-lg font-bold text-white">Analytics</span>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={clsx(
-            'p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors',
+            'p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors',
             collapsed && 'mx-auto'
           )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className="h-4 w-4" />
           ) : (
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-4 w-4" />
           )}
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex flex-col gap-1 p-3">
+      <nav className="flex flex-col gap-0.5 p-2">
         {navigation.map((item) => (
           <NavLink
             key={item.name}
             to={item.href}
             className={({ isActive }) =>
               clsx(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
+                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200',
                 isActive
                   ? 'bg-primary-600 text-white'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800'
               )
             }
           >
-            <item.icon className="h-5 w-5 flex-shrink-0" />
+            <item.icon className="h-4 w-4 flex-shrink-0" />
             {!collapsed && <span>{item.name}</span>}
           </NavLink>
         ))}
@@ -79,10 +79,9 @@ export function Sidebar() {
 
       {/* Footer */}
       {!collapsed && (
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-800">
+        <div className="absolute bottom-0 left-0 right-0 px-3 py-2 border-t border-gray-800">
           <div className="text-xs text-gray-500">
-            <p>Enterprise Analytics</p>
-            <p className="mt-1">v1.0.0</p>
+            <p>Enterprise Analytics v1.0.0</p>
           </div>
         </div>
       )}

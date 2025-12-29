@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import random
 from app import db
 from app.models import Transaction, Customer, Pipeline, Product
+from app.routes.operations import get_pipeline_metrics
 
 bp = Blueprint('dashboard', __name__, url_prefix='/api/dashboard')
 
@@ -69,12 +70,9 @@ def get_summary():
         Transaction.status == 'completed'
     ).scalar() or 0
 
-    # Pipeline value (current open pipeline)
-    pipeline_value = db.session.query(
-        func.sum(Pipeline.amount)
-    ).filter(
-        Pipeline.stage.notin_(['closed-won', 'closed-lost'])
-    ).scalar() or 0
+    # Get consistent pipeline metrics using shared function
+    pipeline_metrics = get_pipeline_metrics(start_date, end_date)
+    pipeline_value = pipeline_metrics['pipelineValue']
 
     # Calculate current period metrics
     avg_order_value = float(current_revenue) / current_orders if current_orders else 0

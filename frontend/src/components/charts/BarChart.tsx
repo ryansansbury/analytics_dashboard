@@ -18,13 +18,14 @@ interface BarChartProps<T> {
   yKeys: (keyof T)[];
   labels?: Record<string, string>;
   colors?: string[];
-  height?: number;
+  height?: number | '100%';
   showGrid?: boolean;
   showLegend?: boolean;
   formatY?: 'currency' | 'number' | 'percent';
   horizontal?: boolean;
   stacked?: boolean;
   colorByValue?: boolean;
+  angledLabels?: boolean;
 }
 
 export function BarChart<T extends Record<string, unknown>>({
@@ -33,13 +34,14 @@ export function BarChart<T extends Record<string, unknown>>({
   yKeys,
   labels = {},
   colors = CHART_COLORS,
-  height = 300,
+  height = '100%',
   showGrid = true,
   showLegend = false,
   formatY = 'currency',
   horizontal = false,
   stacked = false,
   colorByValue = false,
+  angledLabels = false,
 }: BarChartProps<T>) {
   const formatAxis = formatY === 'currency' ? currencyAxisFormatter : numberAxisFormatter;
   const formatTooltip = formatY === 'currency' ? formatCurrency : (v: number) => v.toLocaleString();
@@ -48,7 +50,7 @@ export function BarChart<T extends Record<string, unknown>>({
     <RechartsBarChart
       data={data}
       layout="vertical"
-      margin={{ top: 10, right: 10, left: 80, bottom: 0 }}
+      margin={{ top: 0, right: 0, left: 50, bottom: 0 }}
     >
       {showGrid && (
         <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
@@ -111,7 +113,10 @@ export function BarChart<T extends Record<string, unknown>>({
       ))}
     </RechartsBarChart>
   ) : (
-    <RechartsBarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+    <RechartsBarChart
+      data={data}
+      margin={{ top: 0, right: 0, left: 0, bottom: angledLabels ? 60 : 0 }}
+    >
       {showGrid && (
         <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
       )}
@@ -119,9 +124,13 @@ export function BarChart<T extends Record<string, unknown>>({
       <XAxis
         dataKey={String(xKey)}
         stroke="#6B7280"
-        fontSize={12}
+        fontSize={10}
         tickLine={false}
         axisLine={false}
+        angle={angledLabels ? -45 : 0}
+        textAnchor={angledLabels ? 'end' : 'middle'}
+        height={angledLabels ? 80 : 30}
+        interval={0}
       />
 
       <YAxis

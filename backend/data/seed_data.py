@@ -29,7 +29,7 @@ np.random.seed(42)
 # Configuration
 NUM_PRODUCTS = 120
 NUM_CUSTOMERS = 2000
-NUM_SALES_REPS = 25
+NUM_SALES_REPS = 31
 NUM_TRANSACTIONS = 55000
 NUM_PIPELINE = 500
 START_DATE = datetime.now() - timedelta(days=730)  # 2 years ago

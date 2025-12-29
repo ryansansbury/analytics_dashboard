@@ -71,28 +71,28 @@ export function DataTable<T extends Record<string, unknown>>({
 
   const getSortIcon = (key: string) => {
     if (sortKey !== key) {
-      return <ChevronsUpDown className="h-4 w-4 text-gray-500" />;
+      return <ChevronsUpDown className="h-3 w-3 text-gray-500" />;
     }
     if (sortDirection === 'asc') {
-      return <ChevronUp className="h-4 w-4 text-primary-400" />;
+      return <ChevronUp className="h-3 w-3 text-primary-400" />;
     }
-    return <ChevronDown className="h-4 w-4 text-primary-400" />;
+    return <ChevronDown className="h-3 w-3 text-primary-400" />;
   };
 
-  const cellPadding = compact ? 'px-3 py-2' : 'px-4 py-3';
+  const cellPadding = compact ? 'px-2 py-1.5' : 'px-3 py-2';
 
   if (data.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400 text-sm">
+      <div className="h-full flex items-center justify-center text-gray-400 text-sm">
         {emptyMessage}
       </div>
     );
   }
 
   return (
-    <div className={clsx('overflow-x-auto', className)}>
-      <table className="w-full">
-        <thead>
+    <div className={clsx('h-full overflow-auto', className)}>
+      <table className="w-full" style={{ tableLayout: 'fixed' }}>
+        <thead className="sticky top-0 bg-gray-900 z-10">
           <tr className="border-b border-gray-800">
             {columns.map((column) => (
               <th
@@ -144,10 +144,12 @@ export function DataTable<T extends Record<string, unknown>>({
                     key={String(column.key)}
                     className={clsx(
                       cellPadding,
-                      'text-sm text-gray-300',
+                      compact ? 'text-xs' : 'text-sm',
+                      'text-gray-300 truncate',
                       column.align === 'right' && 'text-right',
                       column.align === 'center' && 'text-center'
                     )}
+                    style={{ width: column.width }}
                   >
                     {column.render ? column.render(value, row) : String(value ?? '')}
                   </td>

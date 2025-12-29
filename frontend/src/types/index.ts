@@ -134,6 +134,8 @@ export interface Customer {
   status: 'active' | 'churned' | 'at-risk';
   acquisitionDate: string;
   region: string;
+  daysSinceActivity?: number;
+  riskScore?: number;
 }
 
 /** Customer segment summary for segment distribution charts */

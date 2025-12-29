@@ -109,26 +109,26 @@ export function Header({ title, subtitle }: HeaderProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <header className="sticky top-0 z-30 bg-gray-900/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 dark:border-gray-800">
-      <div className="flex items-center justify-between px-6 py-4">
+    <header className="sticky top-0 z-30 bg-gray-900/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 dark:border-gray-800 h-12 flex-shrink-0">
+      <div className="flex items-center justify-between px-4 h-full">
         {/* Title */}
-        <div>
-          <h1 className="text-2xl font-semibold text-white">{title}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold text-white">{title}</h1>
           {subtitle && (
-            <p className="text-sm text-gray-400 mt-0.5">{subtitle}</p>
+            <p className="text-xs text-gray-400">|&nbsp; {subtitle}</p>
           )}
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {/* Date Range Selector */}
-          <div className="flex items-center bg-gray-800 rounded-lg p-1">
+          <div className="flex items-center bg-gray-800 rounded-md p-0.5">
             {datePresets.map((preset) => (
               <button
                 key={preset.value}
                 onClick={() => setDatePreset(preset.value)}
                 className={clsx(
-                  'px-3 py-1.5 text-sm font-medium rounded-md transition-all',
+                  'px-2 py-1 text-xs font-medium rounded transition-all',
                   filters.dateRange.preset === preset.value
                     ? 'bg-primary-600 text-white'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700'
@@ -140,15 +140,15 @@ export function Header({ title, subtitle }: HeaderProps) {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-1 ml-2">
+          <div className="flex items-center gap-0.5">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50"
               aria-label="Refresh data"
             >
               <RefreshCw
-                className={clsx('h-5 w-5', isRefreshing && 'animate-spin')}
+                className={clsx('h-4 w-4', isRefreshing && 'animate-spin')}
               />
             </button>
 
@@ -158,7 +158,7 @@ export function Header({ title, subtitle }: HeaderProps) {
                 onClick={() => setShowExportMenu(!showExportMenu)}
                 disabled={exportStatus === 'loading'}
                 className={clsx(
-                  'p-2 rounded-lg transition-colors',
+                  'p-1.5 rounded-md transition-colors',
                   exportStatus === 'success'
                     ? 'text-green-400 bg-green-900/30'
                     : exportStatus === 'error'
@@ -170,11 +170,11 @@ export function Header({ title, subtitle }: HeaderProps) {
                 aria-label="Export data"
               >
                 {exportStatus === 'loading' ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : exportStatus === 'success' ? (
-                  <Check className="h-5 w-5" />
+                  <Check className="h-4 w-4" />
                 ) : (
-                  <Download className="h-5 w-5" />
+                  <Download className="h-4 w-4" />
                 )}
               </button>
               {showExportMenu && (
@@ -205,10 +205,10 @@ export function Header({ title, subtitle }: HeaderProps) {
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors relative"
+                className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors relative"
                 aria-label="Notifications"
               >
-                <Bell className="h-5 w-5" />
+                <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
                   <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full flex items-center justify-center">
                     <span className="sr-only">{unreadCount} unread</span>
@@ -259,13 +259,13 @@ export function Header({ title, subtitle }: HeaderProps) {
 
             <button
               onClick={toggleDarkMode}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors"
               aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {darkMode ? (
-                <Sun className="h-5 w-5" />
+                <Sun className="h-4 w-4" />
               ) : (
-                <Moon className="h-5 w-5" />
+                <Moon className="h-4 w-4" />
               )}
             </button>
           </div>

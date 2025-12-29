@@ -1,6 +1,6 @@
-import { DollarSign, Users, TrendingUp, ShoppingCart, Target, Activity } from 'lucide-react';
+import { DollarSign, Users, TrendingUp, Target } from 'lucide-react';
 import { Header } from '../components/layout/Header';
-import { KPICard, KPIGrid } from '../components/cards/KPICard';
+import { KPICard } from '../components/cards/KPICard';
 import { ChartCard } from '../components/cards/ChartCard';
 import { AreaChart } from '../components/charts/AreaChart';
 import { BarChart } from '../components/charts/BarChart';
@@ -55,7 +55,7 @@ export function Dashboard() {
   const { data: revenueTrends, isLoading: trendsLoading } = useRevenueTrends(granularity);
   const { data: categoryData, isLoading: categoryLoading } = useRevenueByCategory();
   const { data: pipelineData, isLoading: pipelineLoading } = usePipeline();
-  const { data: topProducts, isLoading: productsLoading } = useTopProducts(5);
+  const { data: topProducts, isLoading: productsLoading } = useTopProducts(8);
 
   // Transform data for charts
   const kpis = summaryData?.kpis || {
@@ -71,11 +71,13 @@ export function Dashboard() {
     orders: item.orders,
   }));
 
-  const chartCategoryData = (categoryData || []).map(item => ({
-    category: item.category,
-    value: item.value,
-    percentage: item.percentage,
-  }));
+  const chartCategoryData = (categoryData || [])
+    .map(item => ({
+      category: item.category,
+      value: item.value,
+      percentage: item.percentage,
+    }))
+    .sort((a, b) => b.percentage - a.percentage);
 
   const funnelData = (pipelineData || []).map((item, index, arr) => ({
     stage: item.stage,
@@ -99,21 +101,22 @@ export function Dashboard() {
   }));
 
   return (
-    <div className="min-h-screen">
+    <div className="h-full flex flex-col overflow-hidden">
       <Header
         title="Executive Dashboard"
-        subtitle={`Data from ${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
+        subtitle={`${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
       />
 
-      <div className="p-6 space-y-6">
-        {/* KPI Cards */}
-        <KPIGrid>
+      {/* Content area with flexible row heights */}
+      <div className="flex-1 p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
+        {/* Row 1: KPIs - auto height */}
+        <div className="flex-shrink-0 grid grid-cols-4 gap-2">
           <KPICard
             label="Total Revenue"
             value={kpis.totalRevenue?.value || 25000000}
             changePercent={kpis.totalRevenue?.changePercent || 12.5}
             format="currency"
-            icon={<DollarSign className="h-5 w-5" />}
+            icon={<DollarSign className="h-4 w-4" />}
             loading={summaryLoading}
           />
           <KPICard
@@ -121,15 +124,15 @@ export function Dashboard() {
             value={kpis.totalCustomers?.value || 500}
             changePercent={kpis.totalCustomers?.changePercent || 8.3}
             format="number"
-            icon={<Users className="h-5 w-5" />}
+            icon={<Users className="h-4 w-4" />}
             loading={summaryLoading}
           />
           <KPICard
-            label="Avg Order Value"
-            value={kpis.avgOrderValue?.value || 45000}
-            changePercent={kpis.avgOrderValue?.changePercent || 3.5}
+            label="Pipeline Value"
+            value={kpis.pipelineValue?.value || 35000000}
+            changePercent={kpis.pipelineValue?.changePercent || 8.5}
             format="currency"
-            icon={<ShoppingCart className="h-5 w-5" />}
+            icon={<TrendingUp className="h-4 w-4" />}
             loading={summaryLoading}
           />
           <KPICard
@@ -137,71 +140,59 @@ export function Dashboard() {
             value={winRate}
             changePercent={kpis.pipelineValue?.changePercent ? kpis.pipelineValue.changePercent * 0.3 : 5.2}
             format="percent"
-            icon={<Target className="h-5 w-5" />}
+            icon={<Target className="h-4 w-4" />}
             loading={summaryLoading || pipelineLoading}
           />
-          <KPICard
-            label="Pipeline Value"
-            value={kpis.pipelineValue?.value || 35000000}
-            changePercent={kpis.pipelineValue?.changePercent || 8.5}
-            format="currency"
-            icon={<TrendingUp className="h-5 w-5" />}
-            loading={summaryLoading}
-          />
-          <KPICard
-            label="Growth Rate"
-            value={kpis.totalRevenue?.changePercent || 12.5}
-            changePercent={kpis.avgOrderValue?.changePercent ? kpis.avgOrderValue.changePercent * 0.5 : 3.2}
-            format="percent"
-            icon={<Activity className="h-5 w-5" />}
-            loading={summaryLoading}
-          />
-        </KPIGrid>
+        </div>
 
-        {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <ChartCard
-            title="Revenue Trend"
-            subtitle={`${getGranularityLabel(granularity)} revenue over the selected period`}
-            className="lg:col-span-2"
-            loading={trendsLoading}
-          >
-            <AreaChart
-              data={trendData}
-              xKey="date"
-              yKeys={['revenue']}
-              labels={{ revenue: 'Revenue' }}
-              height={320}
-            />
-          </ChartCard>
+        {/* Row 2: Revenue Trend + Category - 30% of remaining space */}
+        <div className="flex-[30] min-h-0 grid grid-cols-3 gap-2">
+          <div className="col-span-2">
+            <ChartCard
+              title="Revenue Trend"
+              subtitle={`${getGranularityLabel(granularity)} revenue over time`}
+              loading={trendsLoading}
+            >
+              <AreaChart
+                data={trendData}
+                xKey="date"
+                yKeys={['revenue']}
+                labels={{ revenue: 'Revenue' }}
+              />
+            </ChartCard>
+          </div>
 
           <ChartCard
             title="Revenue by Category"
-            subtitle="Distribution by product category"
+            subtitle="By product category"
             loading={categoryLoading}
           >
             <DonutChart
               data={chartCategoryData}
               nameKey="category"
               valueKey="value"
-              height={320}
             />
           </ChartCard>
         </div>
 
-        {/* Charts Row 2 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Row 3: Pipeline + Products - 35% of remaining space */}
+        <div className="flex-[35] min-h-0 grid grid-cols-2 gap-2">
           <ChartCard
             title="Sales Pipeline"
-            subtitle="Opportunity value by stage"
+            subtitle="By stage"
             loading={pipelineLoading}
+            actions={
+              <span className="text-xs text-gray-400">
+                Win Rate: <span className="text-white font-semibold">{winRate.toFixed(1)}%</span>
+              </span>
+            }
           >
-            <FunnelChart data={funnelData} height={320} />
+            <FunnelChart data={funnelData} />
           </ChartCard>
 
           <ChartCard
             title="Top Products"
-            subtitle="Best performing products by revenue"
+            subtitle="By revenue"
             loading={productsLoading}
           >
             <DataTable
@@ -229,21 +220,22 @@ export function Dashboard() {
           </ChartCard>
         </div>
 
-        {/* Revenue Bar Chart */}
-        <ChartCard
-          title={`${getGranularityLabel(granularity)} Revenue Comparison`}
-          subtitle={`Revenue breakdown by ${granularity}`}
-          loading={trendsLoading}
-        >
-          <BarChart
-            data={trendData}
-            xKey="date"
-            yKeys={['revenue']}
-            labels={{ revenue: 'Revenue' }}
-            height={280}
-            colors={['#06B6D4']}
-          />
-        </ChartCard>
+        {/* Row 4: Daily Revenue - full width at bottom, 35% of remaining space */}
+        <div className="flex-[35] min-h-0">
+          <ChartCard
+            title={`${getGranularityLabel(granularity)} Revenue`}
+            subtitle="Comparison"
+            loading={trendsLoading}
+          >
+            <BarChart
+              data={trendData}
+              xKey="date"
+              yKeys={['revenue']}
+              labels={{ revenue: 'Revenue' }}
+              colors={['#06B6D4']}
+            />
+          </ChartCard>
+        </div>
       </div>
     </div>
   );
