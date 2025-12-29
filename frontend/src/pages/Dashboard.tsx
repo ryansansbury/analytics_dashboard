@@ -233,6 +233,7 @@ export function Dashboard() {
               yKeys={['revenue']}
               labels={{ revenue: 'Revenue' }}
               colors={['#06B6D4']}
+              formatXAsDate
             />
           </ChartCard>
         </div>

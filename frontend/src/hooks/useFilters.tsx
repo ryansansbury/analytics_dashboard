@@ -63,7 +63,7 @@ interface FilterContextType {
 const FilterContext = createContext<FilterContextType | undefined>(undefined);
 
 const defaultFilters: FilterState = {
-  dateRange: getDateRangeFromPreset('last30d'),
+  dateRange: getDateRangeFromPreset('last90d'),
   region: undefined,
   segment: undefined,
   category: undefined,
