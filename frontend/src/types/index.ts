@@ -267,7 +267,7 @@ export interface DashboardSummary {
 export interface DateRange {
   startDate: string;
   endDate: string;
-  preset?: 'last7d' | 'last30d' | 'last90d' | 'ytd' | 'lastYear' | 'custom';
+  preset?: 'last30d' | 'last90d' | 'lastYear' | 'custom';
 }
 
 /** Global filter state shared across all dashboard pages */

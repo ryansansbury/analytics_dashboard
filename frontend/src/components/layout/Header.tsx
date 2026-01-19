@@ -11,10 +11,8 @@ interface HeaderProps {
 }
 
 const datePresets: { value: DatePreset; label: string }[] = [
-  { value: 'last7d', label: 'Last 7 days' },
   { value: 'last30d', label: 'Last 30 days' },
   { value: 'last90d', label: 'Last 90 days' },
-  { value: 'ytd', label: 'Year to date' },
   { value: 'lastYear', label: 'Last 12 months' },
 ];
 
