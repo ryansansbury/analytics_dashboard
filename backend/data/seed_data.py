@@ -32,8 +32,8 @@ NUM_CUSTOMERS = 2000
 NUM_SALES_REPS = 31
 NUM_TRANSACTIONS = 55000
 NUM_PIPELINE = 500
-START_DATE = datetime.now() - timedelta(days=730)  # 2 years ago
-END_DATE = datetime.now()
+START_DATE = None
+END_DATE = None
 
 # Categories and their pricing tiers
 CATEGORIES = {
@@ -302,6 +302,10 @@ def generate_pipeline(customers, sales_reps):
 
 def seed_database():
     """Seed the database with generated data."""
+    global START_DATE, END_DATE
+    START_DATE = datetime.now() - timedelta(days=730)  # 2 years ago
+    END_DATE = datetime.now()
+
     from app import create_app, db
     from app.models import Product, Customer, SalesRep, Transaction, Pipeline
 

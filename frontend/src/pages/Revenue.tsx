@@ -18,10 +18,12 @@ import { useFilters } from '../hooks/useFilters';
 // Determine appropriate granularity based on date range
 function getGranularity(preset?: string): 'day' | 'week' | 'month' {
   switch (preset) {
+    case 'last7d':
     case 'last30d':
       return 'day';
     case 'last90d':
       return 'week';
+    case 'ytd':
     case 'lastYear':
     default:
       return 'month';

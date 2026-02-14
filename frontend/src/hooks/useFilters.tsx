@@ -1,16 +1,22 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { subDays, subMonths, format } from 'date-fns';
+import { subDays, subMonths, startOfYear, format } from 'date-fns';
 import type { DateRange, FilterState } from '../types';
 
-type DatePreset = 'last30d' | 'last90d' | 'lastYear' | 'custom';
+type DatePreset = 'last7d' | 'last30d' | 'last90d' | 'ytd' | 'lastYear' | 'custom';
 
 function getDateRangeFromPreset(preset: DatePreset): DateRange {
   const today = new Date();
   const formatDate = (date: Date) => format(date, 'yyyy-MM-dd');
 
   switch (preset) {
+    case 'last7d':
+      return {
+        startDate: formatDate(subDays(today, 7)),
+        endDate: formatDate(today),
+        preset,
+      };
     case 'last30d':
       return {
         startDate: formatDate(subDays(today, 30)),
@@ -20,6 +26,12 @@ function getDateRangeFromPreset(preset: DatePreset): DateRange {
     case 'last90d':
       return {
         startDate: formatDate(subDays(today, 90)),
+        endDate: formatDate(today),
+        preset,
+      };
+    case 'ytd':
+      return {
+        startDate: formatDate(startOfYear(today)),
         endDate: formatDate(today),
         preset,
       };
