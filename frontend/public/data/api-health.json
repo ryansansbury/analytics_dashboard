@@ -1,1 +1,1 @@
-{"data":{"ageInDays":0,"counts":{"customers":2000,"pipeline":500,"transactions":44743},"latestTransaction":"2026-08-09","seeded":true},"environment":"development","status":"healthy"}
+{"data":{"ageInDays":0,"counts":{"customers":2000,"pipeline":1800,"transactions":45174},"latestTransaction":"2026-11-06","seeded":true},"environment":"development","status":"healthy"}
