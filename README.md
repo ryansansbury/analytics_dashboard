@@ -2,7 +2,7 @@
 
 A business intelligence platform for a B2B software company with five pages of reporting over one warehouse. It covers revenue, customers, the sales pipeline, and forecasting. Built with React 19, Flask, PostgreSQL, and scikit-learn.
 
-### **[Open the live demo](https://analytics.ryansansbury.com)**
+### **[Open the live demo](https://www.ryansansbury.com/analytics-dashboard/)**
 
 No signup. Everything on screen came out of the code in this repository. The queries ran against PostgreSQL and the churn and forecasting numbers come from scikit-learn models scored on data they never trained on.
 
@@ -83,14 +83,15 @@ npm run build          # live, talks to Flask and Postgres
 npm run build:static   # static, reads the snapshot
 ```
 
-Regenerate and publish in one step.
+The demo lives at `/analytics-dashboard/` on the website beside the site's other demos. A static build is based at that folder, the refresh script stages it into the website, and the website's own deploy publishes it.
 
 ```bash
-./scripts/refresh-demo.sh              # reseed, snapshot, test, build, deploy
-./scripts/refresh-demo.sh --no-deploy  # everything except publishing
+./scripts/refresh-demo.sh               # reseed, snapshot, test, build, stage into the site
+./scripts/refresh-demo.sh --no-stage    # everything except staging
+./scripts/refresh-demo.sh --check-live  # after the site's deploy, check the live demo
 ```
 
-The coverage test runs before the deploy and not after. A snapshot missing an endpoint stops the release instead of reaching production as a blank chart. The script pins its own database rather than reading an ambient `DATABASE_URL` because inheriting one points a reseed at whatever project exported it.
+The coverage test runs before anything is staged. A snapshot missing an endpoint stops the release instead of reaching production as a blank chart. The script pins its own database rather than reading an ambient `DATABASE_URL` because inheriting one points a reseed at whatever project exported it.
 
 Every number in the demo came out of the real pipeline. The demo's clock is frozen at the date the snapshot was taken and the sidebar says so, and the presets resolve against that date so they never ask for a window the snapshot doesn't hold.
 

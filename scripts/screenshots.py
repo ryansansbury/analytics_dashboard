@@ -4,8 +4,9 @@
     ./scripts/refresh-demo.sh --no-deploy --yes      (or: cd frontend && npm run build:static)
     backend/venv/bin/python scripts/screenshots.py
 
-It serves frontend/dist on 127.0.0.1 with the same single-page fallback Cloudflare Pages uses, opens it in headless
-Chrome with a fresh profile, and drives Chrome over its DevTools pipe. Nothing leaves the machine. Chrome is told
+It serves frontend/dist on 127.0.0.1 under /analytics-dashboard/, the folder it lives in on the website, with the
+same rewrites the site uses for the app's routes. It opens the pages in headless Chrome with a fresh profile and drives
+Chrome over its DevTools pipe. Nothing leaves the machine. Chrome is told
 the visitor prefers reduced motion, which the charts honour by drawing without animation, so every frame is settled.
 
 It writes
@@ -50,6 +51,8 @@ APPS = Path("/").joinpath("Applications")
 CHROMES = (APPS.joinpath("Google Chrome.app", "Contents", "MacOS", "Google Chrome"),
            APPS.joinpath("Chromium.app", "Contents", "MacOS", "Chromium"))
 TRAMPOLINE = 'exec "$@" 3<&0 4>&1 0</dev/null 1>&2'
+#: The folder the demo is served from on the website, and so the base it is built for.
+PREFIX = "/analytics-dashboard"
 
 PAGES = (("executive", "/"), ("revenue", "/revenue"), ("customers", "/customers"),
          ("operations", "/operations"), ("forecasting", "/forecasting"))
@@ -98,11 +101,25 @@ def find_chrome(given=None):
 
 
 class SpaHandler(http.server.SimpleHTTPRequestHandler):
-    """Static files, and index.html for any path that isn't one, as the Pages fallback does."""
+    """The build under PREFIX, with index.html for the app's routes, as the website serves it.
+
+    Anything outside the folder is a 404, the same as on the site, so a file the build
+    asks for at the root instead of under its base shows up as a failed request.
+    """
 
     def send_head(self):
-        path = self.translate_path(self.path)
-        if not Path(path).exists() and "." not in Path(self.path.split("?", 1)[0]).name:
+        raw, _, query = self.path.partition("?")
+        if raw == PREFIX:
+            self.send_response(301)
+            self.send_header("Location", PREFIX + "/")
+            self.end_headers()
+            return None
+        if not raw.startswith(PREFIX + "/"):
+            self.send_error(404)
+            return None
+        rest = raw[len(PREFIX):]
+        self.path = rest + ("?" + query if query else "")
+        if not Path(self.translate_path(self.path)).exists() and "." not in Path(rest).name:
             self.path = "/index.html"
         return super().send_head()
 
@@ -302,11 +319,13 @@ def main():
 
     if not DIST.joinpath("index.html").exists() or not DIST.joinpath("data", "manifest.json").exists():
         raise SystemExit("No static build at frontend/dist. Run: cd frontend && npm run build:static")
+    if f"{PREFIX}/assets/" not in DIST.joinpath("index.html").read_text():
+        raise SystemExit(f"frontend/dist isn't built for {PREFIX}/. Run: cd frontend && npm run build:static")
 
     OUT.mkdir(parents=True, exist_ok=True)
     shutil.rmtree(REVIEW, ignore_errors=True)
     server = serve(args.port)
-    base = f"http://127.0.0.1:{server.server_address[1]}"
+    base = f"http://127.0.0.1:{server.server_address[1]}{PREFIX}"
     browser = Browser(find_chrome(args.chrome))
     pages = [p for p in PAGES if not args.only or p[0] == args.only]
     report = {"range": args.range, "shots": []}

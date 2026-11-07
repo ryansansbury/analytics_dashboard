@@ -168,6 +168,13 @@ breakage was traded for predictable staleness.
 under every preset against the snapshot and fails on any request it does not
 cover, so a missing endpoint breaks a test rather than producing a blank chart.
 
+**Amended 2026-11-06.** The demo moved from its own Cloudflare Pages project at
+analytics.ryansansbury.com to a folder on www.ryansansbury.com beside the site's
+other demos, so all three share one address pattern and one deploy. A static
+build is based at `/analytics-dashboard/`, `refresh-demo.sh` stages it into the
+website, and the website's rules give it its own security policy and route its
+pages. The old address redirects every path to the same page at the new one.
+
 ---
 
 ## 8. PostgreSQL is required, not one option among several

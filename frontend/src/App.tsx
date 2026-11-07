@@ -27,6 +27,7 @@ import { Revenue } from './pages/Revenue';
 import { Customers } from './pages/Customers';
 import { Operations } from './pages/Operations';
 import { Forecasting } from './pages/Forecasting';
+import { routerBasename } from './utils/base';
 
 /**
  * React Query client configuration
@@ -53,14 +54,14 @@ const queryClient = new QueryClient({
  * 1. ErrorBoundary - Catches React errors, shows fallback UI
  * 2. QueryClientProvider - Enables React Query hooks throughout app
  * 3. FilterProvider - Provides global date range filter state
- * 4. BrowserRouter - Enables client-side routing
+ * 4. BrowserRouter - Enables client-side routing, under the build's base path
  */
 function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <FilterProvider>
-          <BrowserRouter>
+          <BrowserRouter basename={routerBasename(import.meta.env.BASE_URL)}>
             <Routes>
               <Route path="/" element={<Layout />}>
                 <Route index element={<Dashboard />} />

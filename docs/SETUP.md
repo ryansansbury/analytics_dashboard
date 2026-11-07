@@ -122,9 +122,15 @@ source that produced it.
 ## The hosted demo
 
 ```bash
-./scripts/refresh-demo.sh             # reseed, snapshot, test, build, deploy
-./scripts/refresh-demo.sh --no-deploy # everything except publishing
+./scripts/refresh-demo.sh              # reseed, snapshot, test, build, stage into the site
+./scripts/refresh-demo.sh --no-stage   # everything except staging
+./scripts/refresh-demo.sh --check-live # after the site's deploy, check the live demo
 ```
+
+The demo is served from `/analytics-dashboard/` on www.ryansansbury.com, so a static
+build is based at that folder. Preview one locally with
+`cd frontend && VITE_STATIC_DATA=true npx vite preview --port 4455` and open
+`http://localhost:4455/analytics-dashboard/`.
 
 This is a different artifact from the production build above: a static snapshot
 with no server and no database. See `ARCHITECTURE.md`. The coverage test runs

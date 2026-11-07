@@ -2,7 +2,17 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+/*
+ * Where the app is served from. The live app sits at the root of its own
+ * origin beside Flask. The static demo lives in a folder on
+ * www.ryansansbury.com, beside the site's other demos, so its assets, routes,
+ * and data files all start with /analytics-dashboard/. DEMO_BASE overrides it
+ * for anyone hosting the static build somewhere else.
+ */
+const base = process.env.DEMO_BASE ?? (process.env.VITE_STATIC_DATA === 'true' ? '/analytics-dashboard/' : '/')
+
 export default defineConfig({
+  base,
   plugins: [react(), tailwindcss()],
   build: {
     rollupOptions: {
