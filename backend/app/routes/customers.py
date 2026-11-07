@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 from sqlalchemy import func, extract
 from datetime import datetime, timedelta
-from app import db
+from app import analytics, db
 from app.periods import drop_incomplete_tail, granularity_for
 from app.models import Customer, Transaction
 from app.routes.forecasting import get_at_risk_customers_with_scores
@@ -23,23 +23,23 @@ def get_overview():
     start = datetime.strptime(start_date, '%Y-%m-%d').date()
     end = datetime.strptime(end_date, '%Y-%m-%d').date()
 
-    # Calculate previous period
-    period_days = (end - start).days
-    prev_start = start - timedelta(days=period_days)
-    prev_end = start - timedelta(days=1)
+    # The prior window has the same number of days as this one.
+    prev_start, prev_end = analytics.prior_window(start, end)
 
-    # Current period - customers who had transactions in this period
+    # Active means a completed order in the window, the definition the
+    # Executive page uses, so the two pages report the same count.
     current_active = db.session.query(
         func.count(func.distinct(Transaction.customer_id))
     ).filter(
-        Transaction.transaction_date.between(start, end)
+        Transaction.transaction_date.between(start, end),
+        Transaction.status == 'completed',
     ).scalar() or 0
 
-    # Previous period active customers
     prev_active = db.session.query(
         func.count(func.distinct(Transaction.customer_id))
     ).filter(
-        Transaction.transaction_date.between(prev_start, prev_end)
+        Transaction.transaction_date.between(prev_start, prev_end),
+        Transaction.status == 'completed',
     ).scalar() or 0
 
     # New customers acquired in this period
@@ -69,9 +69,10 @@ def get_overview():
         Customer.status == 'churned'
     ).scalar() or 0
 
-    # At risk customers - use shared function for consistency with Forecasting page
-    at_risk_customers = get_at_risk_customers_with_scores(start_date, end_date)
-    at_risk = len(at_risk_customers)
+    # Customers the churn model puts at 50% or higher, the same count the
+    # Forecasting page reports. This used to be the length of the whole scored
+    # list, which is every live customer, so the card read 1.6K "at risk".
+    at_risk = analytics.at_risk_count(get_at_risk_customers_with_scores(start_date, end_date))
 
     def pct_change(current, previous):
         """Period-over-period change, or None when there is no baseline."""
@@ -96,6 +97,7 @@ def get_overview():
         # neither of these can be differenced. Null lets the UI omit the arrow.
         'churnedChange': None,
         'atRisk': at_risk,
+        'atRiskThreshold': analytics.RISK_THRESHOLD,
         'atRiskChange': None,
     }
 
@@ -141,93 +143,36 @@ def get_segments():
 
 @bp.route('/cohorts')
 def get_cohorts():
-    """Get cohort retention analysis - 12 months of data."""
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    """Monthly retention for the twelve most recent first-purchase cohorts.
 
-    if not start_date:
-        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-    if not end_date:
-        end_date = datetime.now().strftime('%Y-%m-%d')
+    A customer belongs to the month of their first completed order, so month 0
+    is 100% by definition. Month k is the share of the cohort with a completed
+    order k months later. Only whole months count, and cells a cohort hasn't
+    reached yet are null.
 
-    start = datetime.strptime(start_date, '%Y-%m-%d').date()
-    end = datetime.strptime(end_date, '%Y-%m-%d').date()
+    Cohorts used to be keyed on acquisition month while month 0 counted orders,
+    so a customer acquired late in a month and buying early in the next made
+    month 0 read 30% and month 1 read higher, which no retention curve does.
 
-    # Get customers grouped by acquisition month within the period
-    cohorts = db.session.query(
-        func.date_trunc('month', Customer.acquisition_date).label('cohort'),
-        func.count(Customer.id).label('initial_count')
-    ).filter(
-        Customer.acquisition_date.isnot(None),
-        Customer.acquisition_date.between(start, end)
-    ).group_by(
-        func.date_trunc('month', Customer.acquisition_date)
-    ).order_by(
-        func.date_trunc('month', Customer.acquisition_date).desc()
-    ).limit(12).all()
+    Cohorts end at `end_date`. `start_date` is accepted and ignored, because a
+    cohort table needs a year of months whatever the page's filter is.
+    """
+    _, end, _ = analytics.parse_window(request.args)
+    return analytics.cohort_retention(analytics.load_cohort_purchases(), end)
 
-    # Measured retention. For each acquisition-month cohort, the share of that
-    # cohort with at least one completed transaction in each subsequent month.
-    #
-    # This used to be a hardcoded decay curve, [100, 92, 88, 85, 82, 80, 78, 76,
-    # 75, 74, 73, 72], plus a per-month random jitter reseeded off the cohort
-    # label. It ran the cohort query above and then discarded the result, so the
-    # chart showed the same invented curve no matter what the customers did.
-    if not cohorts:
-        return []
 
-    sql = db.text("""
-        WITH cohort AS (
-            SELECT id, date_trunc('month', acquisition_date) AS cohort_month
-            FROM customers
-            WHERE acquisition_date IS NOT NULL
-              AND acquisition_date BETWEEN :start AND :end
-        ),
-        activity AS (
-            SELECT c.cohort_month,
-                   c.id,
-                   (EXTRACT(YEAR  FROM age(date_trunc('month', t.transaction_date), c.cohort_month)) * 12
-                  + EXTRACT(MONTH FROM age(date_trunc('month', t.transaction_date), c.cohort_month)))::int
-                       AS month_offset
-            FROM cohort c
-            JOIN transactions t ON t.customer_id = c.id
-            WHERE t.status = 'completed'
-        )
-        SELECT cohort_month, month_offset, COUNT(DISTINCT id) AS active
-        FROM activity
-        WHERE month_offset BETWEEN 0 AND 11
-        GROUP BY cohort_month, month_offset
-    """)
-    rows = db.session.execute(sql, {'start': start, 'end': end}).fetchall()
-
-    active = {}
-    for row in rows:
-        active[(row.cohort_month, int(row.month_offset))] = int(row.active)
-
-    sizes = {c.cohort: int(c.initial_count) for c in cohorts if c.cohort}
-
-    result = []
-    for cohort in cohorts:
-        cohort_date = cohort.cohort
-        if not cohort_date:
-            continue
-        size = sizes.get(cohort_date, 0)
-        if not size:
-            continue
-
-        entry = {'cohort': cohort_date.strftime('%b %Y'), 'cohortSize': size}
-        for offset in range(12):
-            # None rather than 0 for months this cohort has not lived through
-            # yet, so the heatmap leaves them blank instead of showing a crash
-            # in retention that has not happened.
-            key = (cohort_date, offset)
-            if key in active:
-                entry[f'month{offset}'] = round(active[key] / size * 100, 1)
-            else:
-                entry[f'month{offset}'] = None
-        result.append(entry)
-
-    return result
+@bp.route('/risk-value')
+def get_risk_value():
+    """Every live customer's churn probability against their last year's revenue."""
+    scored = get_at_risk_customers_with_scores()
+    annual = analytics.trailing_revenue()
+    points = analytics.risk_points(scored, annual)
+    return {
+        'points': points,
+        'threshold': analytics.RISK_THRESHOLD,
+        'scored': len(scored),
+        'withoutRevenue': len(scored) - len(points),
+    }
 
 
 @bp.route('/lifetime-value')
@@ -236,14 +181,16 @@ def get_lifetime_value():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
-    # Define LTV ranges
+    # Bands roughly logarithmic, because lifetime value is heavily skewed. The
+    # old top band started at $100K and held more than half of all customers.
     ranges = [
-        (0, 1000, '$0 - $1K'),
-        (1000, 5000, '$1K - $5K'),
-        (5000, 10000, '$5K - $10K'),
-        (10000, 50000, '$10K - $50K'),
-        (50000, 100000, '$50K - $100K'),
-        (100000, float('inf'), '$100K+'),
+        (0, 25000, 'Under $25K'),
+        (25000, 50000, '$25K to $50K'),
+        (50000, 100000, '$50K to $100K'),
+        (100000, 250000, '$100K to $250K'),
+        (250000, 500000, '$250K to $500K'),
+        (500000, 1000000, '$500K to $1M'),
+        (1000000, float('inf'), '$1M and up'),
     ]
 
     # Build base query with date filter
@@ -273,49 +220,27 @@ def get_lifetime_value():
 
 @bp.route('/acquisition')
 def get_acquisition():
-    """Get customer acquisition by channel over time."""
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    """New customers per bucket, split by acquisition channel.
 
-    if not start_date:
-        start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-    if not end_date:
-        end_date = datetime.now().strftime('%Y-%m-%d')
+    Grouped in pandas rather than with date_trunc, so it runs on any database,
+    and only whole buckets are returned, at both ends of the window. A partial
+    bucket split across five channels drops every channel at once, which reads
+    as acquisition collapsing.
+    """
+    import pandas as pd
 
-    start = datetime.strptime(start_date, '%Y-%m-%d').date()
-    end = datetime.strptime(end_date, '%Y-%m-%d').date()
-
-    # Determine granularity based on date range
-    period_days = (end - start).days
-    granularity = granularity_for(period_days)
-    date_trunc = func.date_trunc(granularity, Customer.acquisition_date)
-
-    results = db.session.query(
-        date_trunc.label('date'),
-        Customer.acquisition_channel,
-        func.count(Customer.id).label('count')
-    ).filter(
+    start, end, granularity = analytics.parse_window(request.args, default_days=365)
+    buckets = analytics.complete_buckets(start, end, granularity)
+    rows = db.session.query(Customer.acquisition_date, Customer.acquisition_channel).filter(
         Customer.acquisition_date.between(start, end)
-    ).group_by(
-        date_trunc,
-        Customer.acquisition_channel
-    ).order_by(
-        date_trunc
     ).all()
-
-    rows = [
-        {
-            'date': row.date.strftime('%Y-%m-%d') if row.date else None,
-            'channel': row.acquisition_channel or 'Other',
-            'count': row.count,
-        }
-        for row in results
-    ]
-
-    # Several rows share each bucket (one per channel), so an incomplete
-    # trailing month would drop every channel at once and read as acquisition
-    # collapsing. Same rule as the revenue trend.
-    return drop_incomplete_tail(rows, granularity, end)
+    frame = pd.DataFrame(
+        [(d, 1.0, c or 'Other') for d, c in rows], columns=['day', 'amount', 'channel'])
+    series = analytics.split_series(frame, buckets, granularity, 'channel')
+    for point in series['points']:
+        for key in series['keys']:
+            point[key] = int(point[key])
+    return {'granularity': granularity, **series}
 
 
 @bp.route('/at-risk')

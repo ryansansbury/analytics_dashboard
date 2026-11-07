@@ -25,6 +25,7 @@ from .customer import Customer
 from .sales_rep import SalesRep
 from .transaction import Transaction
 from .pipeline import Pipeline
+from .stage_change import StageChange
 from .daily_metric import DailyMetric
 
 __all__ = [
@@ -33,5 +34,6 @@ __all__ = [
     'SalesRep',
     'Transaction',
     'Pipeline',
+    'StageChange',
     'DailyMetric',
 ]

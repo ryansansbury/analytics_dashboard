@@ -48,12 +48,21 @@ OUT_DIR = BACKEND.parent / "frontend" / "public" / "data"
 #: frontend/src/services/staticData.test.ts drives the real API layer against a
 #: real manifest and fails on any request this list did not produce, so a
 #: mismatch here breaks a test rather than a page.
+def _year_before(t: date) -> date:
+    """The same day a year earlier, with February 29 falling back to the 28th as date-fns does."""
+    try:
+        return t.replace(year=t.year - 1)
+    except ValueError:
+        return t.replace(year=t.year - 1, day=28)
+
+
+#: Both ends of a window are inclusive, so "last 7 days" starts six days back.
 PRESETS = {
-    "last7d": lambda t: t - timedelta(days=7),
-    "last30d": lambda t: t - timedelta(days=30),
-    "last90d": lambda t: t - timedelta(days=90),
+    "last7d": lambda t: t - timedelta(days=6),
+    "last30d": lambda t: t - timedelta(days=29),
+    "last90d": lambda t: t - timedelta(days=89),
     "ytd": lambda t: date(t.year, 1, 1),
-    "lastYear": lambda t: date(t.year - 1, t.month, t.day),
+    "lastYear": lambda t: _year_before(t) + timedelta(days=1),
 }
 
 #: Granularity per preset, mirroring `getGranularity` on the Dashboard page.
@@ -77,12 +86,10 @@ def slugify(path: str) -> str:
     return slug or "index"
 
 
-#: Row limits the pages actually ask for. Two pages request different depths of
-#: the same endpoint, so both are snapshotted.
+#: Row limits the pages actually ask for.
 LIMITS = {
-    "top_products": (8, 18),   # Dashboard, Revenue
+    "top_products": (10,),     # Revenue
     "at_risk": (10,),          # Customers
-    "churn_risk": (17,),       # Forecasting
 }
 
 
@@ -90,51 +97,55 @@ def endpoints_for(start: str, end: str, granularity: str) -> list[str]:
     """Every request the UI makes for one preset.
 
     Mirrors the call sites in frontend/src/services/api.ts exactly, including
-    parameter order, because the query string is the cache key. Two details are
-    easy to get wrong and both matter: `cycle-time` sends only `start_date`, and
-    the `limit` parameters differ per page.
+    parameter order, because the query string is the cache key. Several views
+    don't depend on the window's start and send only `end_date` (the calendar,
+    the cohort table, the pipeline flow, and stage durations), and two send
+    nothing at all (lifetime value and the risk scatter). Those collapse to one
+    file shared by every preset.
 
     Requests are listed here rather than discovered, so a frontend test drives
     the real API layer against the generated manifest and fails on anything the
     UI asks for that this list did not produce.
     """
     dr = f"start_date={start}&end_date={end}"
+    g = f"granularity={granularity}"
     paths = [
+        # Executive
         f"/api/dashboard/summary?{dr}",
-        f"/api/dashboard/kpis?{dr}",
+        f"/api/revenue/comparison?{dr}&{g}",
         f"/api/revenue/by-category?{dr}",
-        f"/api/revenue/by-region?{dr}",
-        f"/api/revenue/by-channel?{dr}",
-        f"/api/customers/overview?{dr}",
-        f"/api/customers/segments?{dr}",
-        f"/api/customers/cohorts?{dr}",
-        f"/api/customers/lifetime-value?{dr}",
-        f"/api/customers/acquisition?{dr}",
+        f"/api/revenue/calendar?end_date={end}",
         f"/api/operations/pipeline?{dr}",
+        # Revenue
+        f"/api/revenue/category-trends?{dr}&{g}",
+        f"/api/revenue/region-trends?{dr}&{g}",
+        f"/api/revenue/by-channel?{dr}",
+        f"/api/revenue/order-sizes?{dr}",
+        # Customers
+        f"/api/customers/overview?{dr}",
+        f"/api/customers/cohorts?end_date={end}",
+        f"/api/customers/acquisition?{dr}",
+        f"/api/customers/segments?{dr}",
+        "/api/customers/lifetime-value",
+        # Operations
         f"/api/operations/pipeline-kpis?{dr}",
+        f"/api/operations/pipeline-flow?end_date={end}",
         f"/api/operations/sales-performance?{dr}",
-        f"/api/operations/cycle-time?start_date={start}",
-        f"/api/operations/deal-size-distribution?{dr}",
-        "/api/operations/conversion-rates",
-        "/api/operations/opportunities?limit=20",
-        f"/api/forecasting/revenue?periods=6&{dr}",
+        f"/api/operations/cycle-time?end_date={end}",
         f"/api/forecasting/pipeline?{dr}",
-        f"/api/forecasting/seasonality?{dr}",
+        # Forecasting
         f"/api/forecasting/kpis?{dr}",
         f"/api/forecasting/model-performance?{dr}",
+        f"/api/forecasting/revenue?periods=6&{dr}",
+        f"/api/forecasting/seasonality?{dr}",
         f"/api/forecasting/revenue-at-risk?{dr}",
+        "/api/customers/risk-value",
         "/api/health",
     ]
-    # The preset's own granularity is what the pages request; the other two are
-    # cheap and cover a user switching granularity without a rebuild.
-    for g in {granularity, "day", "week", "month"}:
-        paths.append(f"/api/revenue/trends?{dr}&granularity={g}")
     for n in LIMITS["top_products"]:
         paths.append(f"/api/revenue/top-products?{dr}&limit={n}")
     for n in LIMITS["at_risk"]:
         paths.append(f"/api/customers/at-risk?limit={n}&{dr}")
-    for n in LIMITS["churn_risk"]:
-        paths.append(f"/api/forecasting/churn-risk?limit={n}&{dr}")
     return paths
 
 
@@ -174,6 +185,8 @@ def main() -> int:
         start = start_of(taken_on).isoformat()
         end = taken_on.isoformat()
         for path in endpoints_for(start, end, GRANULARITY[preset]):
+            if path in written:
+                continue  # shared by every preset and already taken
             response = client.get(path)
             if response.status_code != 200:
                 failed.append((path, response.status_code))

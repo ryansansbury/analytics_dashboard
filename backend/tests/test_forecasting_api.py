@@ -181,18 +181,50 @@ class TestChurnRisk:
 class TestRevenueAtRisk:
     def test_buckets_are_consistent(self, client, ctx):
         payload = client.get("/api/forecasting/revenue-at-risk").get_json()
-        total_customers = (
-            payload["highRisk"]["customers"]
-            + payload["mediumRisk"]["customers"]
-            + payload["lowRisk"]["customers"]
-        )
-        assert total_customers == payload["totalCustomers"]
+        at_risk = payload["highRisk"]["customers"] + payload["mediumRisk"]["customers"]
+        assert at_risk == payload["totalCustomers"]
+        assert at_risk + payload["lowRisk"]["customers"] == payload["scoredCustomers"]
 
-    def test_values_sum_to_total(self, client, ctx):
+    def test_total_is_the_high_and_medium_tiers(self, client, ctx):
+        """The low tier is not at risk. It used to be added into the total."""
         payload = client.get("/api/forecasting/revenue-at-risk").get_json()
-        parts = (
-            payload["highRisk"]["value"]
-            + payload["mediumRisk"]["value"]
-            + payload["lowRisk"]["value"]
-        )
-        assert abs(parts - payload["total"]) <= 3  # integer rounding per bucket
+        parts = payload["highRisk"]["value"] + payload["mediumRisk"]["value"]
+        assert abs(parts - payload["total"]) <= 2  # integer rounding per bucket
+
+    def test_values_are_last_years_revenue(self, client, ctx):
+        from app import analytics
+        from app.routes.forecasting import get_at_risk_customers_with_scores
+
+        payload = client.get("/api/forecasting/revenue-at-risk").get_json()
+        annual = analytics.trailing_revenue()
+        high = sum(annual.get(c["id"], 0.0) for c in get_at_risk_customers_with_scores()
+                   if c["riskScore"] >= 0.65)
+        assert payload["highRisk"]["value"] == int(high)
+
+
+class TestForecastIntervals:
+    def test_the_95_band_contains_the_80_band(self, client, ctx):
+        rows = client.get("/api/forecasting/revenue?periods=6").get_json()
+        future = [r for r in rows if r["actual"] is None]
+        assert future
+        for r in future:
+            assert r["lower95"] <= r["lowerBound"] <= r["predicted"]
+            assert r["predicted"] <= r["upperBound"] <= r["upper95"]
+
+    def test_both_bands_open_from_the_join(self, client, ctx):
+        rows = client.get("/api/forecasting/revenue?periods=6").get_json()
+        join = [r for r in rows if r["actual"] is not None and r["predicted"] is not None][0]
+        assert join["lower95"] == join["upper95"] == join["actual"]
+
+    def test_backtest_matches_the_model_holdout(self, client, ctx):
+        rows = client.get("/api/forecasting/revenue?periods=6").get_json()
+        forecast = registry.get_revenue_forecast()
+        expected = {
+            p.start_time.strftime("%Y-%m-%d"): round(float(v), 2)
+            for p, v in zip(forecast.backtest["period"], forecast.backtest["revenue"])
+        }
+        shown = {r["date"]: r["backtest"] for r in rows if r["backtest"] is not None}
+        assert shown
+        for day, value in shown.items():
+            assert value == expected[day]
+        assert all(r["backtest"] is None for r in rows if r["actual"] is None)

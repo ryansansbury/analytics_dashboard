@@ -1,56 +1,10 @@
 from flask import Blueprint, request
 from sqlalchemy import func
 from datetime import datetime, timedelta
-from app import db
+from app import analytics, db
 from app.models import Pipeline, SalesRep, Transaction
 
 bp = Blueprint('operations', __name__, url_prefix='/api/operations')
-
-
-def get_pipeline_metrics(start_date=None, end_date=None):
-    """
-    Shared function to calculate pipeline metrics consistently.
-    Used by both dashboard and operations endpoints.
-    """
-    # Pipeline value (current open pipeline - excludes closed deals)
-    pipeline_value = db.session.query(
-        func.sum(Pipeline.amount)
-    ).filter(
-        Pipeline.stage.notin_(['closed-won', 'closed-lost'])
-    ).scalar() or 0
-
-    # Win rate calculation
-    closed_won = db.session.query(func.count(Pipeline.id)).filter(
-        Pipeline.stage == 'closed-won'
-    ).scalar() or 0
-
-    total_closed = db.session.query(func.count(Pipeline.id)).filter(
-        Pipeline.stage.in_(['closed-won', 'closed-lost'])
-    ).scalar() or 1
-
-    leads = db.session.query(func.count(Pipeline.id)).filter(
-        Pipeline.stage == 'lead'
-    ).scalar() or 1
-
-    # Win rate can be calculated two ways - we use closed-won / total leads for funnel perspective
-    win_rate = (closed_won / leads) * 100 if leads > 0 else 0
-
-    # Total deals in pipeline
-    total_deals = db.session.query(func.count(Pipeline.id)).filter(
-        Pipeline.stage.notin_(['closed-won', 'closed-lost'])
-    ).scalar() or 1
-
-    # Average deal size
-    avg_deal_size = float(pipeline_value) / total_deals if total_deals > 0 else 0
-
-    return {
-        'pipelineValue': float(pipeline_value),
-        'winRate': win_rate,
-        'avgDealSize': avg_deal_size,
-        'totalDeals': total_deals,
-        'closedWon': closed_won,
-        'leads': leads,
-    }
 
 
 @bp.route('/pipeline')
@@ -115,38 +69,28 @@ def get_pipeline():
 
 @bp.route('/pipeline-kpis')
 def get_pipeline_kpis():
-    """Pipeline KPIs.
+    """Open pipeline, win rate, won deal size, and sales cycle, each against the prior window.
 
-    The three `*Change` fields and `avgCycleTime` are null. That is deliberate.
+    All of it comes from each deal's stage history. Win rate is deals won over
+    deals won or lost, among deals that closed in the window. Cycle time is
+    days from creation to the win. The open pipeline is what was open on the
+    window's last day.
 
-    They used to be `random.uniform(5.0, 15.0)` and friends, with a comment
-    stating the changes were "ALWAYS non-zero" so the UI would show movement.
-    Deal cycle time was `42 + random.randint(-5, 8)` days, a constant with
-    jitter. None of it described the business.
-
-    A period-over-period delta needs a prior observation, and this application
-    stores no historical snapshots of pipeline value, win rate, or deal size.
-    Cycle time needs opportunity stage-transition timestamps, and the Pipeline
-    model has only `created_at` and `expected_close_date`. Returning null lets
-    the UI omit the figure rather than draw a fictional one.
+    Before stage history existed every change here was null, and before that
+    they were `random.uniform(5.0, 15.0)` with a comment promising they were
+    "ALWAYS non-zero", and cycle time was `42 + random.randint(-5, 8)`. Win rate
+    was won deals over deals currently sitting at lead, which isn't a rate of
+    anything.
     """
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    start, end, _ = analytics.parse_window(request.args, default_days=30)
+    return analytics.pipeline_kpis(analytics.load_opportunities(), start, end)
 
-    metrics = get_pipeline_metrics(start_date, end_date)
 
-    return {
-        'pipelineValue': round(metrics['pipelineValue'], 2),
-        'winRate': round(metrics['winRate'], 1),
-        'avgDealSize': round(metrics['avgDealSize'], 2),
-        # No prior-period snapshot exists to difference against. See docstring.
-        'pipelineChange': None,
-        'winRateChange': None,
-        'dealSizeChange': None,
-        # Needs stage-transition timestamps the schema does not carry.
-        'avgCycleTime': None,
-        'cycleTimeChange': None,
-    }
+@bp.route('/pipeline-flow')
+def get_pipeline_flow():
+    """How the deals created in the 12 months to `end_date` moved through the stages."""
+    _, end, _ = analytics.parse_window(request.args)
+    return analytics.pipeline_flow(analytics.load_opportunities(), end)
 
 
 @bp.route('/sales-performance')
@@ -186,8 +130,11 @@ def get_sales_performance():
     for row in results:
         achieved = float(row.achieved) if row.achieved else 0
         quota = float(row.quota) if row.quota else 0
-        # Calculate attainment as percentage of annual quota achieved
-        attainment = round((achieved / quota * 100), 1) if quota > 0 else 0
+        # Quotas are annual. Attainment compares the window's bookings with the
+        # share of the year the window covers. Against the full annual figure a
+        # 90-day window put every rep near 25%, and a 7-day one near 2%.
+        period_quota = analytics.prorated(quota, start, end)
+        attainment = round(achieved / period_quota * 100, 1) if period_quota > 0 else None
 
         reps_data.append({
             'id': row.id,
@@ -195,13 +142,14 @@ def get_sales_performance():
             'team': row.team,
             'region': row.region,
             'quota': quota,
+            'periodQuota': round(period_quota, 2),
             'achieved': achieved,
             'deals': row.deals or 0,
             'attainment': attainment,
         })
 
     # Sort by attainment descending
-    reps_data.sort(key=lambda x: x['attainment'], reverse=True)
+    reps_data.sort(key=lambda x: x['attainment'] if x['attainment'] is not None else -1, reverse=True)
 
     # Attainment above is measured: achieved revenue over assigned quota.
     #
@@ -212,91 +160,33 @@ def get_sales_performance():
     # attainment so the two columns would agree. Its own comment read "Ensure we
     # show a growing organization hitting goals."
     #
-    # The leaderboard now shows how the reps actually did.
-    return reps_data[:20]
+    # The leaderboard now shows how the reps actually did, all of them.
+    return reps_data
 
 
 @bp.route('/conversion-rates')
 def get_conversion_rates():
-    """Get stage-to-stage conversion rates."""
-    stages = ['lead', 'qualified', 'proposal', 'negotiation', 'closed-won']
+    """Stage-to-stage conversion over the 12 months to `end_date`, from stage history.
 
-    results = []
-    counts = {}
-
-    # Get counts for each stage
-    for stage in stages:
-        count = db.session.query(
-            func.count(Pipeline.id)
-        ).filter(
-            Pipeline.stage == stage
-        ).scalar() or 0
-        counts[stage] = count
-
-    # Calculate conversion rates
-    for i in range(len(stages) - 1):
-        from_stage = stages[i]
-        to_stage = stages[i + 1]
-
-        rate = 0
-        if counts[from_stage] > 0:
-            rate = round((counts[to_stage] / counts[from_stage]) * 100, 1)
-
-        results.append({
-            'fromStage': f"{from_stage.title()} → {to_stage.title()}",
-            'rate': rate,
-        })
-
-    return results
+    This used to divide the number of deals currently sitting in one stage by
+    the number currently sitting in the next, which measures nothing about how
+    deals move.
+    """
+    _, end, _ = analytics.parse_window(request.args)
+    return analytics.stage_conversion(analytics.load_opportunities(), end)
 
 
 @bp.route('/cycle-time')
 def get_cycle_time():
-    """Average expected days from opportunity creation to close, by stage.
+    """Average days deals spent in each stage, for stage exits in the 12 months to `end_date`.
 
-    Measured from `created_at` and `expected_close_date` on the opportunities
-    themselves.
-
-    This is deliberately NOT stage-to-stage transition time, which is what the
-    endpoint used to claim. It reported a hardcoded [8, 12, 15, 7] days plus
-    `random.randint` jitter, reseeded off the filter string so the invented
-    numbers at least stayed stable per window. True transition time needs a
-    history of when each opportunity entered each stage, and the Pipeline model
-    carries no such timestamps, so it cannot be computed from this schema.
-
-    What is computable is how long deals currently sitting in each stage are
-    expected to take end to end, which is a real and useful figure. The label
-    says what it is.
+    Measured from stage history. Before that history existed this endpoint
+    reported expected end-to-end close time by current stage, which was the
+    closest real figure the schema allowed, and before that a hardcoded
+    [8, 12, 15, 7] with jitter.
     """
-    stages = ['lead', 'qualified', 'proposal', 'negotiation']
-
-    rows = db.session.query(
-        Pipeline.stage,
-        func.avg(
-            func.cast(Pipeline.expected_close_date, db.Date)
-            - func.cast(Pipeline.created_at, db.Date)
-        ).label('avg_days'),
-        func.count(Pipeline.id).label('count'),
-    ).filter(
-        Pipeline.stage.in_(stages),
-        Pipeline.expected_close_date.isnot(None),
-        Pipeline.created_at.isnot(None),
-    ).group_by(Pipeline.stage).all()
-
-    by_stage = {r.stage: r for r in rows}
-
-    result = []
-    for stage in stages:
-        row = by_stage.get(stage)
-        if row is None or row.avg_days is None:
-            continue
-        result.append({
-            'stage': stage.replace('-', ' ').title(),
-            'avgDays': round(float(row.avg_days), 1),
-            'count': int(row.count),
-        })
-
-    return result
+    _, end, _ = analytics.parse_window(request.args)
+    return analytics.stage_durations(analytics.load_opportunities(), end)
 
 
 @bp.route('/opportunities')

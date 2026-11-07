@@ -92,10 +92,25 @@ class TestForecastingKpis:
         assert payload["accuracyChange"] is None
 
     def test_at_risk_count_matches_the_scored_list(self, client, ctx):
+        """Customers at or above the threshold, not every customer scored.
+
+        The count used to be the length of the whole scored list, which is
+        every live customer, so the card claimed nearly the entire base was at
+        risk.
+        """
         payload = client.get("/api/forecasting/kpis").get_json()
         from app.routes.forecasting import get_at_risk_customers_with_scores
 
-        assert payload["atRiskCount"] == len(get_at_risk_customers_with_scores())
+        scored = get_at_risk_customers_with_scores()
+        expected = sum(1 for c in scored if c["riskScore"] >= payload["atRiskThreshold"])
+        assert payload["atRiskCount"] == expected
+        assert payload["atRiskCount"] < len(scored)
+
+    def test_names_the_forecast_month(self, client, ctx):
+        payload = client.get("/api/forecasting/kpis").get_json()
+        forecast = registry.get_revenue_forecast()
+        first = forecast.predictions["period"].iloc[0].start_time.strftime("%Y-%m-%d")
+        assert payload["predictedMonth"] == first
 
     def test_is_stable_across_calls(self, client, ctx):
         assert (

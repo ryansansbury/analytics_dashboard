@@ -1,10 +1,10 @@
 from flask import Blueprint, request
 from datetime import datetime
 import pandas as pd
-from app import db
+from app import analytics, db
 from app.models import Transaction, Customer, Pipeline
 from app import ml
-from app.ml.features import customer_frame
+from app.ml.features import CHURN_HORIZON_DAYS, customer_frame, live_customers
 
 bp = Blueprint('forecasting', __name__, url_prefix='/api/forecasting')
 
@@ -28,8 +28,9 @@ def get_at_risk_customers_with_scores(start_date=None, end_date=None, limit=None
     if model is None:
         return []
 
-    frame = customer_frame()
-    frame = frame[frame['status'] != 'churned'].copy()
+    # Live customers only, the population the model was trained on: not
+    # marked churned, and with an order in the last six months.
+    frame = live_customers(customer_frame()).copy()
     if frame.empty:
         return []
 
@@ -46,6 +47,10 @@ def get_at_risk_customers_with_scores(start_date=None, end_date=None, limit=None
     if limit:
         frame = frame.head(limit)
 
+    # What each customer spent in the last year, which is what leaving would
+    # cost. Lifetime value is what they already spent.
+    annual = analytics.trailing_revenue()
+
     scored = []
     for row in frame.itertuples():
         customer = lookup.get(row.customer_id)
@@ -58,6 +63,7 @@ def get_at_risk_customers_with_scores(start_date=None, end_date=None, limit=None
             'company': customer.company,
             'segment': customer.segment,
             'lifetimeValue': float(customer.lifetime_value) if customer.lifetime_value else 0,
+            'annualRevenue': annual.get(customer.id, 0.0),
             'riskScore': round(risk, 2),
             'daysSinceActivity': int(row.recency_days),
             'recommendation': 'Executive outreach' if risk > 0.75 else 'Success check-in',
@@ -76,7 +82,7 @@ def categorize_customers_by_risk(customers_with_scores):
     low_risk = {'customers': 0, 'value': 0}
 
     for customer in customers_with_scores:
-        ltv = customer['lifetimeValue']
+        ltv = customer.get('annualRevenue', customer['lifetimeValue'])
         score = customer['riskScore']
 
         if score >= 0.65:
@@ -127,7 +133,7 @@ def get_model_metrics(start_date=None, end_date=None):
             'improvementOverNaive': m.improvement_over_naive,
             'trainMonths': m.n_train,
             'holdoutMonths': m.n_test,
-            'model': 'Ridge regression on trend, seasonality, and 2 lags',
+            'model': 'Ridge regression on trend, seasonality, quarter-end, and 2 lags',
             'validation': 'chronological holdout',
         }
         # Back-compat keys the existing UI reads. Sourced from the real fit.
@@ -151,6 +157,9 @@ def get_model_metrics(start_date=None, end_date=None):
             'holdoutRows': c.n_test,
             'topFeatures': c.feature_importance,
             'model': 'Gradient-boosted classifier on RFM and account features',
+            'label': f'no completed order in the {CHURN_HORIZON_DAYS} days after the cutoff',
+            'horizonDays': CHURN_HORIZON_DAYS,
+            'cutoff': c.cutoff,
             'validation': 'stratified holdout',
         }
         payload['accuracy'] = round(c.accuracy * 100, 1)
@@ -173,12 +182,17 @@ def add_months(dt, months):
     return datetime(year, month, 1)
 
 
+#: Two-sided normal quantiles for the 80% and 95% intervals.
+Z80 = 1.2816
+Z95 = 1.9600
+
+
 @bp.route('/revenue')
 def get_revenue_forecast():
     """Monthly revenue forecast from the trained model.
 
     Predictions come from `app.ml.revenue`, a ridge regression on trend,
-    cyclical seasonality, and two autoregressive lags, fit on complete months
+    cyclical seasonality, a quarter-end flag, and two autoregressive lags, fit on complete months
     only. Confidence bounds are derived from the model's own holdout RMSE and
     widen with the square root of the horizon, which is the standard way an
     interval grows as you forecast further out.
@@ -249,8 +263,21 @@ def get_revenue_forecast():
         result[-1]['lowerBound'] = anchor
         result[-1]['upperBound'] = anchor
 
-    # Forecast: dashed continuation. The band widens with the square root of the
-    # horizon, which is how forecast uncertainty compounds.
+    if rows:
+        result[-1]['lower95'] = anchor
+        result[-1]['upper95'] = anchor
+
+    # The backtest: what the model predicted for the holdout months when it had
+    # never seen them, drawn over the actuals so the fit is visible rather than
+    # taken on faith from a MAPE figure.
+    backtest = {row.period: float(row.revenue) for row in forecast.backtest.itertuples()}
+    for point, row in zip(result, rows):
+        value = backtest.get(row.period)
+        point['backtest'] = round(value, 2) if value is not None else None
+
+    # Forecast: dashed continuation. Two intervals, 80% and 95%, from the
+    # holdout error treated as normal, each widening with the square root of
+    # the horizon, which is how forecast uncertainty compounds.
     for step, row in enumerate(forecast.predictions.itertuples(), start=1):
         predicted = float(row.revenue)
         spread = rmse * (step ** 0.5)
@@ -258,10 +285,17 @@ def get_revenue_forecast():
             'date': row.period.start_time.strftime('%Y-%m-%d'),
             'actual': None,
             'predicted': round(predicted, 2),
-            'lowerBound': round(max(predicted - spread, 0.0), 2),
-            'upperBound': round(predicted + spread, 2),
+            'lowerBound': round(max(predicted - Z80 * spread, 0.0), 2),
+            'upperBound': round(predicted + Z80 * spread, 2),
+            'lower95': round(max(predicted - Z95 * spread, 0.0), 2),
+            'upper95': round(predicted + Z95 * spread, 2),
+            'backtest': None,
         })
 
+    for point in result:
+        point.setdefault('lower95', None)
+        point.setdefault('upper95', None)
+        point.setdefault('backtest', None)
     return result
 
 
@@ -348,16 +382,19 @@ def get_forecasting_kpis():
     invented both the direction and the magnitude. Returning null lets the UI
     omit the arrow rather than draw a fictional one.
     """
-    at_risk_customers = get_at_risk_customers_with_scores()
-    at_risk_count = len(at_risk_customers)
+    # At or above the risk threshold, the same count the Customers page shows.
+    # This was the length of the whole scored list, every live customer.
+    at_risk_count = analytics.at_risk_count(get_at_risk_customers_with_scores())
 
     model_metrics = get_model_metrics()
 
     predicted_revenue = None
     predicted_change = None
+    predicted_month = None
     forecast = ml.get_revenue_forecast()
     if forecast is not None and not forecast.predictions.empty:
         predicted_revenue = round(float(forecast.predictions['revenue'].iloc[0]), 2)
+        predicted_month = forecast.predictions['period'].iloc[0].start_time.strftime('%Y-%m-%d')
         last_actual = float(forecast.history['revenue'].iloc[-1])
         if last_actual:
             predicted_change = round((predicted_revenue - last_actual) / last_actual * 100, 1)
@@ -365,7 +402,9 @@ def get_forecasting_kpis():
     return {
         'predictedRevenue': predicted_revenue,
         'predictedChange': predicted_change,
+        'predictedMonth': predicted_month,
         'atRiskCount': at_risk_count,
+        'atRiskThreshold': analytics.RISK_THRESHOLD,
         # No historical snapshot exists to difference against. See docstring.
         'atRiskChange': None,
         'modelAccuracy': model_metrics.get('accuracy'),
@@ -466,37 +505,41 @@ def get_model_performance():
 
 @bp.route('/revenue-at-risk')
 def get_revenue_at_risk():
-    """Get revenue at risk by category - uses same customer data as churn-risk."""
+    """Last year's revenue from customers in each churn-risk tier.
+
+    `total` is the high and medium tiers together, the revenue actually at
+    risk. It used to add the low tier too, so the headline counted nearly every
+    customer's spend as at risk. Values are each customer's completed revenue
+    over the last year, which is what losing them would cost. Lifetime value,
+    the old basis, is what they have already paid.
+    """
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
-    # Get at-risk customers using shared function for consistency
     customers = get_at_risk_customers_with_scores(start_date, end_date)
-
-    # Categorize customers by risk level using shared function
     high_risk, medium_risk, low_risk = categorize_customers_by_risk(customers)
-
-    total = high_risk['value'] + medium_risk['value'] + low_risk['value']
 
     return {
         'highRisk': {
             'value': int(high_risk['value']),
             'customers': high_risk['customers'],
-            'label': 'High Risk',
-            'threshold': '65%+ risk',
+            'label': 'High risk',
+            'threshold': '65% or higher',
         },
         'mediumRisk': {
             'value': int(medium_risk['value']),
             'customers': medium_risk['customers'],
-            'label': 'Medium Risk',
-            'threshold': '50-65% risk',
+            'label': 'Medium risk',
+            'threshold': '50% to 65%',
         },
         'lowRisk': {
             'value': int(low_risk['value']),
             'customers': low_risk['customers'],
-            'label': 'Low Risk',
-            'threshold': '<50% risk',
+            'label': 'Low risk',
+            'threshold': 'Under 50%',
         },
-        'total': int(total),
-        'totalCustomers': len(customers),
+        'total': int(high_risk['value'] + medium_risk['value']),
+        'totalCustomers': high_risk['customers'] + medium_risk['customers'],
+        'scoredCustomers': len(customers),
+        'basis': 'completed revenue in the last 12 months',
     }

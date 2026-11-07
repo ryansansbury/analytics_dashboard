@@ -1,7 +1,7 @@
 """Monthly revenue forecasting.
 
 Ridge regression on a small, explicit feature set: a linear trend, cyclical
-month encodings, and two autoregressive lags. Evaluation uses a chronological
+month encodings, a quarter-end flag, and two autoregressive lags. Evaluation uses a chronological
 holdout, never a shuffled split, because shuffling a time series lets the model
 see the future and produces error metrics that are meaningless.
 
@@ -68,26 +68,34 @@ class Forecast:
     backtest: pd.DataFrame
 
 
-def _design_matrix(revenue: np.ndarray, start_index: int, months: np.ndarray) -> np.ndarray:
-    """Trend, month seasonality as sin/cos pairs, and two lags.
+def _features(index: int, month: int, lag1: float, lag2: float) -> list[float]:
+    """One month's row: trend, yearly cycle, the quarter-end flag, and two lags.
 
     Cyclical encoding rather than twelve dummies: with only two years of data,
     dummies would spend a parameter per month on roughly two observations each
     and memorise noise.
+
+    The quarter-end flag is one parameter for a known B2B pattern, deals pulled
+    into March, June, September, and December to land in the quarter. A smooth
+    yearly curve can't make three sharp steps a year, so without it the model
+    read each quarter-end spike as momentum and the month after as a slump.
     """
-    n = len(revenue)
-    rows = []
-    for i in range(N_LAGS, n):
-        month = months[i]
-        rows.append(
-            [
-                start_index + i,
-                np.sin(2 * np.pi * month / 12),
-                np.cos(2 * np.pi * month / 12),
-                revenue[i - 1],
-                revenue[i - 2],
-            ]
-        )
+    return [
+        index,
+        np.sin(2 * np.pi * month / 12),
+        np.cos(2 * np.pi * month / 12),
+        1.0 if month % 3 == 0 else 0.0,
+        lag1,
+        lag2,
+    ]
+
+
+def _design_matrix(revenue: np.ndarray, start_index: int, months: np.ndarray) -> np.ndarray:
+    """One row of `_features` per month that has two months of history behind it."""
+    rows = [
+        _features(start_index + i, months[i], revenue[i - 1], revenue[i - 2])
+        for i in range(N_LAGS, len(revenue))
+    ]
     return np.asarray(rows, dtype=float)
 
 
@@ -157,15 +165,7 @@ def train(frame: pd.DataFrame, horizon: int = 6) -> Forecast:
     for step in range(1, horizon + 1):
         period = last_period + step
         row = np.array(
-            [
-                [
-                    len(series),
-                    np.sin(2 * np.pi * period.month / 12),
-                    np.cos(2 * np.pi * period.month / 12),
-                    series[-1],
-                    series[-2],
-                ]
-            ],
+            [_features(len(series), period.month, series[-1], series[-2])],
             dtype=float,
         )
         value = float(final.predict(row)[0])

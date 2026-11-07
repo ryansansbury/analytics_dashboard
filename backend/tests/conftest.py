@@ -18,7 +18,7 @@ from flask import Flask
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import db  # noqa: E402
-from app.models import Customer, Pipeline, Product, SalesRep, Transaction  # noqa: E402
+from app.models import Customer, Pipeline, Product, SalesRep, StageChange, Transaction  # noqa: E402
 
 # Small enough to seed quickly, large enough for a stratified split to be
 # meaningful and for both models to train.
@@ -34,6 +34,15 @@ def app(tmp_path_factory):
     application.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     application.config["TESTING"] = True
     db.init_app(application)
+
+    # Every blueprint, registered before the first request, because Flask
+    # refuses a registration after the app has served one. Endpoints that
+    # group with Postgres's date_trunc can't run here; the newer ones group
+    # in pandas and can.
+    from app.routes import customers, dashboard, forecasting, operations, revenue
+
+    for module in (dashboard, revenue, customers, operations, forecasting):
+        application.register_blueprint(module.bp)
 
     with application.app_context():
         db.create_all()
@@ -57,20 +66,12 @@ def _seed() -> None:
     seed.NUM_CUSTOMERS = TEST_CUSTOMERS
     seed.NUM_TRANSACTIONS = TEST_TRANSACTIONS
 
-    products = seed.generate_products()
-    reps = seed.generate_sales_reps()
-    customers = seed.generate_customers()
-    transactions = seed.generate_transactions(products, customers, reps)
-    pipeline = seed.generate_pipeline(customers, reps)
-
-    internal = ("engagement", "churn_date")
-    db.session.bulk_insert_mappings(Product, products)
-    db.session.bulk_insert_mappings(SalesRep, reps)
-    db.session.bulk_insert_mappings(
-        Customer, [{k: v for k, v in c.items() if k not in internal} for c in customers]
-    )
-    db.session.bulk_insert_mappings(Transaction, transactions)
-    db.session.bulk_insert_mappings(Pipeline, pipeline)
+    # The same path reseed.py takes, so the fixture data has every table the
+    # application reads, stage history included.
+    data = seed.generate_all()
+    for model, key in ((Product, "products"), (SalesRep, "sales_reps"), (Customer, "customers"),
+                       (Transaction, "transactions"), (Pipeline, "pipeline"), (StageChange, "stage_changes")):
+        db.session.bulk_insert_mappings(model, data[key])
     db.session.commit()
 
 
@@ -82,9 +83,10 @@ def ctx(app):
 
 @pytest.fixture(scope="session")
 def customers_frame(ctx):
-    from app.ml.features import customer_frame
+    """The churn model's training table: features at a past cutoff, labelled by what came after."""
+    from app.ml.features import churn_training_frame
 
-    return customer_frame()
+    return churn_training_frame()
 
 
 @pytest.fixture(scope="session")
@@ -110,10 +112,6 @@ def revenue_forecast(revenue_frame):
 
 @pytest.fixture()
 def client(app):
-    from app.routes import forecasting
-
-    if "forecasting" not in app.blueprints:
-        app.register_blueprint(forecasting.bp)
     return app.test_client()
 
 

@@ -195,6 +195,15 @@ class TestDeterminism:
         '/api/forecasting/model-performance',
         '/api/forecasting/churn-risk',
         '/api/forecasting/seasonality',
+        '/api/revenue/comparison',
+        '/api/revenue/category-trends',
+        '/api/revenue/region-trends',
+        '/api/revenue/calendar',
+        '/api/revenue/order-sizes',
+        '/api/customers/risk-value',
+        '/api/operations/pipeline-flow',
+        '/api/operations/conversion-rates',
+        '/api/forecasting/revenue-at-risk',
     ]
 
     @pytest.mark.parametrize('path', ENDPOINTS)
@@ -213,16 +222,33 @@ class TestChangeFieldsAreHonest:
     """A delta with no prior observation is null, never invented."""
 
     def test_unknowable_deltas_are_null(self, pg_client, pg_ctx):
+        """No churn date and no at-risk snapshot are stored, so these stay null."""
         start, end = _range()
         q = f'?start_date={start}&end_date={end}'
-
-        kpis = pg_client.get(f'/api/operations/pipeline-kpis{q}').get_json()
-        for field in ('pipelineChange', 'winRateChange', 'dealSizeChange', 'cycleTimeChange'):
-            assert kpis[field] is None, field
-
         overview = pg_client.get(f'/api/customers/overview{q}').get_json()
         assert overview['churnedChange'] is None
         assert overview['atRiskChange'] is None
+
+    def test_pipeline_deltas_are_measured_from_stage_history(self, pg_client, pg_ctx):
+        """Stage history made these computable. They were null, and before that random."""
+        start, end = _range()
+        q = f'?start_date={start}&end_date={end}'
+        kpis = pg_client.get(f'/api/operations/pipeline-kpis{q}').get_json()
+        for field in ('pipelineChange', 'winRateChange', 'dealSizeChange', 'cycleTimeChange'):
+            assert kpis[field] is None or isinstance(kpis[field], (int, float)), field
+        assert kpis['avgCycleTime'] is not None and kpis['avgCycleTime'] > 0
+        assert kpis == pg_client.get(f'/api/operations/pipeline-kpis{q}').get_json()
+
+    def test_open_pipeline_on_the_last_day_matches_the_open_rows(self, pg_client, pg_ctx):
+        """Open on a day means created by then and not yet closed, straight from the rows."""
+        start, end = _range()
+        kpis = pg_client.get(
+            f'/api/operations/pipeline-kpis?start_date={start}&end_date={end}').get_json()
+        truth = db.session.query(db.func.sum(Pipeline.amount)).filter(
+            db.func.date(Pipeline.created_at) <= end,
+            db.or_(Pipeline.closed_at.is_(None), Pipeline.closed_at > end),
+        ).scalar()
+        assert kpis['pipelineValue'] == pytest.approx(float(truth), rel=1e-6)
 
     def test_computable_deltas_are_numbers_or_null_never_random(self, pg_client, pg_ctx):
         """Two calls agreeing rules out a PRNG behind the figure."""
@@ -241,9 +267,9 @@ class TestCohortRetention:
             f'/api/customers/cohorts?start_date={start}&end_date={end}'
         ).get_json()
         for row in rows:
-            for k, v in row.items():
-                if k.startswith('month') and v is not None:
-                    assert 0 <= v <= 100, f'{row["cohort"]} {k}={v}'
+            for k, v in enumerate(row['retention']):
+                if v is not None:
+                    assert 0 <= v <= 100, f'{row["label"]} month {k}={v}'
 
     def test_cohort_size_is_reported(self, pg_client, pg_ctx):
         start, end = _range()
@@ -252,18 +278,44 @@ class TestCohortRetention:
         ).get_json()
         assert rows
         for row in rows:
-            assert row['cohortSize'] > 0
+            assert row['size'] > 0
+
+    def test_every_cohort_starts_at_one_hundred(self, pg_client, pg_ctx):
+        """Month 0 is the first purchase, so every member is active in it."""
+        _, end = _range()
+        rows = pg_client.get(f'/api/customers/cohorts?end_date={end}').get_json()
+        assert rows
+        assert all(row['retention'][0] == 100.0 for row in rows)
 
 
 class TestSalesPerformanceIsMeasured:
     def test_attainment_reconciles_with_quota_and_achieved(self, pg_client, pg_ctx):
-        """It used to be overwritten with a manufactured 145-to-61 curve."""
-        rows = pg_client.get('/api/operations/sales-performance').get_json()
+        """It used to be overwritten with a manufactured 145-to-61 curve.
+
+        The quota it's measured against is the annual quota prorated to the
+        window's days. Against the full annual figure every rep sat near the
+        window's share of the year.
+        """
+        start, end = _range()
+        rows = pg_client.get(
+            f'/api/operations/sales-performance?start_date={start}&end_date={end}'
+        ).get_json()
         assert rows
+        days = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
         for rep in rows:
             if rep['quota']:
-                expected = rep['achieved'] / rep['quota'] * 100
+                assert rep['periodQuota'] == pytest.approx(rep['quota'] * days / 365, abs=0.01)
+                expected = rep['achieved'] / rep['periodQuota'] * 100
                 assert rep['attainment'] == pytest.approx(expected, abs=0.2), rep['name']
+
+    def test_attainment_is_spread_around_target(self, pg_client, pg_ctx):
+        start, end = _range()
+        rows = pg_client.get(
+            f'/api/operations/sales-performance?start_date={start}&end_date={end}'
+        ).get_json()
+        attainments = sorted(r['attainment'] for r in rows if r['attainment'] is not None)
+        median = attainments[len(attainments) // 2]
+        assert 60 < median < 140
 
     def test_not_every_rep_beats_quota(self, pg_client, pg_ctx):
         rows = pg_client.get('/api/operations/sales-performance').get_json()

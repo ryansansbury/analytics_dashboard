@@ -6,9 +6,13 @@ fabricated and nothing is sampled.
 
 Two feature sets live here:
 
-- `customer_frame` builds an RFM-style table for churn classification. Recency,
-  frequency, and monetary value are computed from transaction history; tenure
-  and categorical attributes come from the customer record.
+- `customer_frame` builds an RFM-style table as of a given day, from the
+  transactions on or before that day only. Recency, frequency, and monetary
+  value come from transaction history; tenure and categorical attributes come
+  from the customer record.
+- `churn_training_frame` takes that table as of a cutoff 90 days before the
+  latest order and labels each customer live at the cutoff by whether they
+  bought anything in the 90 days after it. The churn model learns from it.
 - `monthly_revenue` builds the completed-revenue series the forecaster trains
   on.
 """
@@ -38,6 +42,14 @@ NUMERIC_FEATURES = [
 ]
 CATEGORICAL_FEATURES = ["segment", "industry", "region", "acquisition_channel"]
 
+#: How far ahead the churn label looks. A customer churns, for the model, when
+#: they go this many days without a completed order.
+CHURN_HORIZON_DAYS = 90
+
+#: A customer is live on a day when their last order was at most this long ago.
+#: Only live customers can churn, so only they are trained on and scored.
+LIVE_DAYS = 180
+
 
 def _as_of_date(as_of: date | None) -> date:
     if as_of is not None:
@@ -47,11 +59,16 @@ def _as_of_date(as_of: date | None) -> date:
 
 
 def customer_frame(as_of: date | None = None) -> pd.DataFrame:
-    """One row per customer, with behavioural features and a churn label.
+    """One row per customer acquired by `as_of`, with behavioural features.
 
-    `as_of` fixes the observation date so recency is reproducible. It defaults
-    to the most recent transaction in the database rather than today, which
-    keeps results stable when the data is not being reseeded.
+    Every figure uses transactions on or before `as_of` and nothing after, so
+    the frame for an earlier day is what was knowable on that day. That is what
+    lets the churn model train on a past cutoff without reading the future.
+    Before it did, the totals here counted every transaction whatever `as_of`
+    said, and only recency moved.
+
+    `as_of` defaults to the most recent transaction in the database rather than
+    today, which keeps results stable when the data is not being reseeded.
     """
     as_of = _as_of_date(as_of)
     window_start = as_of - timedelta(days=90)
@@ -68,7 +85,7 @@ def customer_frame(as_of: date | None = None) -> pd.DataFrame:
             if db.engine.dialect.name == "sqlite"
             else func.count(func.distinct(func.date_trunc("month", Transaction.transaction_date))),
         )
-        .filter(Transaction.status != "pending")
+        .filter(Transaction.status != "pending", Transaction.transaction_date <= as_of)
         .group_by(Transaction.customer_id)
         .all()
     )
@@ -89,7 +106,7 @@ def customer_frame(as_of: date | None = None) -> pd.DataFrame:
             Transaction.customer_id.label("customer_id"),
             func.count(Transaction.id).label("refunds"),
         )
-        .filter(Transaction.status == "refunded")
+        .filter(Transaction.status == "refunded", Transaction.transaction_date <= as_of)
         .group_by(Transaction.customer_id)
         .all()
     )
@@ -102,7 +119,8 @@ def customer_frame(as_of: date | None = None) -> pd.DataFrame:
         )
         .filter(
             Transaction.status == "completed",
-            Transaction.transaction_date >= window_start,
+            Transaction.transaction_date > window_start,
+            Transaction.transaction_date <= as_of,
         )
         .group_by(Transaction.customer_id)
         .all()
@@ -117,7 +135,7 @@ def customer_frame(as_of: date | None = None) -> pd.DataFrame:
         Customer.acquisition_channel,
         Customer.acquisition_date,
         Customer.status,
-    ).all()
+    ).filter(Customer.acquisition_date <= as_of).all()
     df = pd.DataFrame(
         customers,
         columns=[
@@ -159,12 +177,52 @@ def customer_frame(as_of: date | None = None) -> pd.DataFrame:
     for col in CATEGORICAL_FEATURES:
         df[col] = df[col].fillna("unknown").astype(str)
 
-    # Binary target. 'at-risk' is deliberately grouped with retained accounts:
-    # it is a business flag, not an outcome, and folding it into the positive
-    # class would leak an opinion into the label.
-    df["churned"] = (df["status"] == "churned").astype(int)
-
     return df
+
+
+def churn_training_frame(as_of: date | None = None,
+                         horizon_days: int = CHURN_HORIZON_DAYS) -> pd.DataFrame:
+    """Features as of a past cutoff, labelled by what each customer did next.
+
+    The cutoff is `horizon_days` before `as_of`. Customers live at the cutoff,
+    meaning they ordered in the `LIVE_DAYS` before it, get `churned` = 1 when
+    they placed no completed order in the `horizon_days` after it, and 0 when
+    they did. The cutoff attribute records the day the features describe.
+
+    This replaced a label read from the customer's status column. A model
+    trained on that learned to recognise customers who had already left, which
+    recency alone does almost perfectly, and then scored live customers who by
+    construction looked like none of them. Nearly everyone came out under 10%.
+    The question worth a model is the forward one: given what's known today,
+    who stops buying next. A label from the future against features from the
+    past is how that question gets asked honestly.
+    """
+    latest = _as_of_date(as_of)
+    cutoff = latest - timedelta(days=horizon_days)
+    frame = customer_frame(as_of=cutoff)
+    frame = frame[frame["recency_days"] <= LIVE_DAYS].copy()
+
+    bought = {
+        row[0]
+        for row in db.session.query(Transaction.customer_id)
+        .filter(
+            Transaction.status == "completed",
+            Transaction.transaction_date > cutoff,
+            Transaction.transaction_date <= latest,
+        )
+        .distinct()
+        .all()
+    }
+    frame["churned"] = (~frame["customer_id"].isin(bought)).astype(int)
+    frame = frame.reset_index(drop=True)
+    frame.attrs["cutoff"] = cutoff
+    frame.attrs["horizon_days"] = horizon_days
+    return frame
+
+
+def live_customers(frame: pd.DataFrame) -> pd.DataFrame:
+    """Rows for customers who can still churn: not marked churned, and ordering lately."""
+    return frame[(frame["status"] != "churned") & (frame["recency_days"] <= LIVE_DAYS)]
 
 
 def monthly_revenue() -> pd.DataFrame:

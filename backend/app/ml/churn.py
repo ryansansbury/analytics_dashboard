@@ -52,6 +52,8 @@ class ChurnMetrics:
     positive_rate: float
     threshold: float
     feature_importance: dict = field(default_factory=dict)
+    #: The day the training features describe, when the frame recorded one.
+    cutoff: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -151,5 +153,6 @@ def train(frame: pd.DataFrame, threshold: float = 0.5) -> ChurnModel:
         positive_rate=round(float(y.mean()), 4),
         threshold=threshold,
         feature_importance=_feature_importance(pipeline),
+        cutoff=frame.attrs["cutoff"].isoformat() if frame.attrs.get("cutoff") else None,
     )
     return ChurnModel(pipeline, metrics)

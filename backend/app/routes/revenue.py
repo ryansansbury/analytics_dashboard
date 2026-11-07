@@ -18,8 +18,8 @@ Data is aggregated from the transactions table, filtered to completed transactio
 from flask import Blueprint, request
 from sqlalchemy import func, extract
 from datetime import datetime, timedelta
-from app import db
-from app.periods import drop_incomplete_tail
+from app import analytics, db
+from app.periods import drop_incomplete_tail, next_bucket_start
 from app.models import Transaction, Product
 
 bp = Blueprint('revenue', __name__, url_prefix='/api/revenue')
@@ -233,3 +233,105 @@ def get_top_products():
         }
         for row in results
     ]
+
+
+def _last_day(bucket, granularity):
+    if granularity == 'day':
+        return bucket
+    return next_bucket_start(bucket, granularity) - timedelta(days=1)
+
+
+def _change(current, previous):
+    if not previous:
+        return None
+    return round((current - previous) / previous * 100, 1)
+
+
+@bp.route('/comparison')
+def get_comparison():
+    """Revenue in each bucket of the window beside the same bucket a year earlier.
+
+    Year over year rather than against the window just before, because the
+    business is seasonal: a quarter-end spike lines up with last year's spike,
+    so the gap between the two lines is growth and not the calendar.
+    Only whole buckets are compared, at both ends of the window.
+    """
+    start, end, granularity = analytics.parse_window(request.args)
+    buckets = analytics.complete_buckets(start, end, granularity)
+    prior = analytics.year_earlier(buckets, granularity)
+
+    current = analytics.load_orders(start, end)
+    previous = analytics.load_orders(prior[0], _last_day(prior[-1], granularity))
+    points = analytics.revenue_comparison(current, previous, buckets, prior, granularity)
+
+    total = round(sum(p['current'] for p in points), 2)
+    total_prior = round(sum(p['previous'] for p in points), 2)
+    return {
+        'granularity': granularity,
+        'points': points,
+        'current': total,
+        'previous': total_prior,
+        'change': _change(total, total_prior),
+        'startDate': buckets[0].isoformat(),
+        'endDate': _last_day(buckets[-1], granularity).isoformat(),
+    }
+
+
+@bp.route('/category-trends')
+def get_category_trends():
+    """Revenue per bucket for the five largest categories, the rest as Other."""
+    start, end, granularity = analytics.parse_window(request.args)
+    buckets = analytics.complete_buckets(start, end, granularity)
+    orders = analytics.load_orders(start, end)
+    return {'granularity': granularity,
+            **analytics.split_series(orders, buckets, granularity, 'category', top=5)}
+
+
+@bp.route('/region-trends')
+def get_region_trends():
+    """Revenue per bucket for every region, and each region's change on a year earlier."""
+    start, end, granularity = analytics.parse_window(request.args)
+    buckets = analytics.complete_buckets(start, end, granularity)
+    prior = analytics.year_earlier(buckets, granularity)
+    orders = analytics.load_orders(start, end)
+    previous = analytics.load_orders(prior[0], _last_day(prior[-1], granularity))
+    series = analytics.split_series(orders, buckets, granularity, 'region')
+
+    window_end = _last_day(buckets[-1], granularity)
+    prior_end = _last_day(prior[-1], granularity)
+    now = orders[(orders['day'] >= buckets[0]) & (orders['day'] <= window_end)] if not orders.empty else orders
+    before = previous[(previous['day'] >= prior[0]) & (previous['day'] <= prior_end)] \
+        if not previous.empty else previous
+    now_by = now.groupby('region')['amount'].sum().to_dict() if not now.empty else {}
+    before_by = before.groupby('region')['amount'].sum().to_dict() if not before.empty else {}
+
+    totals = [{
+        'region': region,
+        'revenue': round(float(now_by.get(region, 0.0)), 2),
+        'previous': round(float(before_by.get(region, 0.0)), 2),
+        'change': _change(float(now_by.get(region, 0.0)), float(before_by.get(region, 0.0))),
+    } for region in series['keys']]
+    return {'granularity': granularity, **series, 'totals': totals}
+
+
+@bp.route('/calendar')
+def get_calendar():
+    """Daily revenue for the 53 calendar weeks ending with `end_date`."""
+    _, end, _ = analytics.parse_window(request.args)
+    start = analytics.calendar_start(end)
+    days = analytics.daily_calendar(analytics.load_orders(start, end), end)
+    return {
+        'startDate': start.isoformat(),
+        'endDate': end.isoformat(),
+        'days': days,
+        'max': max((d['revenue'] for d in days), default=0),
+    }
+
+
+@bp.route('/order-sizes')
+def get_order_sizes():
+    """How orders and revenue spread across order sizes in the window."""
+    start, end, _ = analytics.parse_window(request.args)
+    orders = analytics.load_orders(start, end)
+    amounts = orders['amount'].tolist() if not orders.empty else []
+    return analytics.size_distribution(amounts)

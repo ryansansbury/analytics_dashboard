@@ -13,12 +13,37 @@ from app.ml.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
 
 
 class TestCustomerFrame:
-    def test_one_row_per_customer(self, customers_frame, ctx):
-        from app.models import Customer
+    def test_one_row_per_customer(self, ctx):
         from app import db
+        from app.ml.features import customer_frame
+        from app.models import Customer, Transaction
 
-        assert len(customers_frame) == db.session.query(Customer).count()
-        assert customers_frame["customer_id"].is_unique
+        frame = customer_frame()
+        latest = db.session.query(db.func.max(Transaction.transaction_date)).scalar()
+        acquired = db.session.query(Customer).filter(Customer.acquisition_date <= latest).count()
+        assert len(frame) == acquired
+        assert frame["customer_id"].is_unique
+
+    def test_features_stop_at_the_as_of_day(self, ctx):
+        """Nothing after `as_of` may reach a feature, or a cutoff-trained model reads the future."""
+        from datetime import timedelta
+
+        from app import db
+        from app.ml.features import customer_frame
+        from app.models import Transaction
+
+        latest = db.session.query(db.func.max(Transaction.transaction_date)).scalar()
+        cutoff = latest - timedelta(days=120)
+        frame = customer_frame(as_of=cutoff).set_index("customer_id")
+        truth = dict(
+            db.session.query(Transaction.customer_id, db.func.count(Transaction.id))
+            .filter(Transaction.status != "pending", Transaction.transaction_date <= cutoff)
+            .group_by(Transaction.customer_id)
+            .all()
+        )
+        for cid, row in frame.head(200).iterrows():
+            assert row["frequency"] == truth.get(cid, 0), cid
+        assert (frame["recency_days"] >= 0).all()
 
     def test_all_model_features_present_and_numeric(self, customers_frame):
         for col in NUMERIC_FEATURES:
@@ -37,12 +62,28 @@ class TestCustomerFrame:
         rate = customers_frame["churned"].mean()
         assert 0.02 < rate < 0.6, f"implausible churn base rate {rate}"
 
-    def test_at_risk_is_not_folded_into_the_positive_class(self, customers_frame):
-        """'at-risk' is a business flag, not an outcome. Treating it as churn
-        would leak an opinion into the label."""
-        at_risk = customers_frame[customers_frame["status"] == "at-risk"]
-        assert len(at_risk) > 0
-        assert (at_risk["churned"] == 0).all()
+    def test_label_comes_from_orders_after_the_cutoff(self, customers_frame, ctx):
+        """Churned means no completed order in the horizon after the cutoff, read
+        from transactions, never from the status column."""
+        from app import db
+        from app.models import Transaction
+
+        cutoff = customers_frame.attrs["cutoff"]
+        latest = db.session.query(db.func.max(Transaction.transaction_date)).scalar()
+        bought = {
+            r[0] for r in db.session.query(Transaction.customer_id).filter(
+                Transaction.status == "completed",
+                Transaction.transaction_date > cutoff,
+                Transaction.transaction_date <= latest,
+            ).distinct()
+        }
+        expected = (~customers_frame["customer_id"].isin(bought)).astype(int)
+        assert (customers_frame["churned"] == expected).all()
+
+    def test_trains_only_on_customers_live_at_the_cutoff(self, customers_frame):
+        from app.ml.features import LIVE_DAYS
+
+        assert (customers_frame["recency_days"] <= LIVE_DAYS).all()
 
     def test_recency_is_non_negative(self, customers_frame):
         assert (customers_frame["recency_days"] >= 0).all()

@@ -17,7 +17,7 @@ import threading
 
 from . import churn as churn_mod
 from . import revenue as revenue_mod
-from .features import customer_frame, monthly_revenue
+from .features import churn_training_frame, monthly_revenue
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def _train_all() -> None:
     global _churn_model, _revenue_forecast, _churn_error, _revenue_error, _trained
 
     try:
-        _churn_model = churn_mod.train(customer_frame())
+        _churn_model = churn_mod.train(churn_training_frame())
         _churn_error = None
     except Exception as exc:  # noqa: BLE001 - surfaced to the caller verbatim
         _churn_model, _churn_error = None, str(exc)
