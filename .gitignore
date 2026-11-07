@@ -19,8 +19,12 @@ backend/static/
 
 # Agent tool settings. Machine-local, and no business being in a public repo.
 # Previously covered only by a global gitignore, which protects one machine
-# rather than the repository.
-.claude/settings.local.json
+# rather than the repository. The whole folder, since it holds more than the
+# one settings file.
+.claude/
+
+# Wrangler's local cache, written by the demo deploy in refresh-demo.sh.
+.wrangler/
 
 # Environment files
 .env
@@ -56,3 +60,7 @@ htmlcov/
 tmp/
 temp/
 .dispatch-log.md
+
+# The screenshot run: review set, card candidates, report, and Chrome profile.
+# The README pictures it writes go to docs/screenshots, which is tracked.
+scripts/out/
