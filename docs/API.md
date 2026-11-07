@@ -15,9 +15,13 @@ Flask on port 5001.
   value cannot be computed, the field is `null` rather than estimated. A null
   `*Change` field means there is no prior period to compare against, not that
   the change is zero.
-- **Time-bucketed series omit a trailing period the window only partly covers.**
-  See `app/periods.py`. A part-month plotted beside complete months reads as a
-  collapse, so it is dropped rather than shown.
+- **Time-bucketed series omit any period the window only partly covers.** The
+  newer endpoints trim both ends with `app/analytics.py` and `/revenue/trends`
+  trims its last bucket with `app/periods.py`. A part-month plotted beside
+  complete months reads as a collapse, and a window opening midweek would start
+  with a short week that reads as a dip.
+- `granularity` is `day`, `week`, or `month`. When it is absent the server picks
+  days up to 31 days, weeks up to 92, and months beyond. Weeks start on Monday.
 
 ---
 
@@ -57,18 +61,30 @@ tables are missing.
 
 ### `GET /api/dashboard/summary`
 
-Params: `start_date` (default 30d), `end_date` (default today). Current period
-against the preceding period of equal length.
+Params: `start_date` (default 30d), `end_date` (default today). The window
+against the prior window of the same number of days, ending the day before it
+starts. Active customers are customers with a completed order. The open
+pipeline is what was open on each window's last day, from stage history.
+`trends` holds one point per whole bucket for the tiles' sparklines.
 
 ```json
 {
   "kpis": {
     "totalRevenue":   { "value": 0, "previousValue": 0, "change": 0, "changePercent": 0 },
     "totalCustomers": { "value": 0, "previousValue": 0, "change": 0, "changePercent": 0 },
+    "totalOrders":    { "value": 0, "previousValue": 0, "changePercent": 0 },
     "avgOrderValue":  { "value": 0, "changePercent": 0 },
     "pipelineValue":  { "value": 0, "changePercent": 0 }
   },
-  "dateRange": { "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD" }
+  "trends": {
+    "revenue":   [{ "date": "YYYY-MM-DD", "value": 0 }],
+    "customers": [{ "date": "YYYY-MM-DD", "value": 0 }],
+    "aov":       [{ "date": "YYYY-MM-DD", "value": 0 }],
+    "pipeline":  [{ "date": "YYYY-MM-DD", "value": 0 }]
+  },
+  "granularity": "week",
+  "dateRange": { "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD",
+                 "previousStartDate": "YYYY-MM-DD", "previousEndDate": "YYYY-MM-DD" }
 }
 ```
 
@@ -88,6 +104,66 @@ bucket is dropped.
 
 ```json
 [ { "date": "YYYY-MM-DD", "revenue": 0, "orders": 0 } ]
+```
+
+### `GET /api/revenue/comparison`
+
+Params: `start_date`, `end_date`, `granularity`. Revenue in each whole bucket of
+the window beside the same bucket a year earlier. Months shift by twelve. Days
+and weeks shift by 364 days so weekdays line up.
+
+```json
+{
+  "granularity": "week",
+  "points": [{ "date": "YYYY-MM-DD", "label": "Aug 10", "previousDate": "YYYY-MM-DD",
+               "previousLabel": "Aug 11", "current": 0, "previous": 0 }],
+  "current": 0, "previous": 0, "change": 27.4,
+  "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD"
+}
+```
+
+### `GET /api/revenue/category-trends`
+
+Params: `start_date`, `end_date`, `granularity`. Revenue per bucket for the five
+largest categories over the window, with the rest summed as `Other`. `keys` is
+ordered largest first.
+
+```json
+{ "granularity": "month", "keys": ["Security Solutions", "...", "Other"],
+  "points": [{ "date": "YYYY-MM-DD", "label": "Dec 2025", "Security Solutions": 0 }] }
+```
+
+### `GET /api/revenue/region-trends`
+
+Params: `start_date`, `end_date`, `granularity`. Revenue per bucket for every
+region, plus each region's total and its change on the same buckets a year
+earlier.
+
+```json
+{ "granularity": "month", "keys": ["North America", "..."],
+  "points": [{ "date": "YYYY-MM-DD", "label": "Dec 2025", "North America": 0 }],
+  "totals": [{ "region": "North America", "revenue": 0, "previous": 0, "change": 0 }] }
+```
+
+### `GET /api/revenue/calendar`
+
+Params: `end_date`. Daily revenue for the 53 calendar weeks ending with the
+week that holds `end_date`, starting on a Monday and stopping at `end_date`.
+Days with no orders are present with zero revenue.
+
+```json
+{ "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "max": 0,
+  "days": [{ "date": "YYYY-MM-DD", "week": 0, "weekday": 0, "revenue": 0 }] }
+```
+
+### `GET /api/revenue/order-sizes`
+
+Params: `start_date`, `end_date`. Orders and revenue in roughly logarithmic size
+bands, as counts and as shares.
+
+```json
+[{ "band": "$2.5K to $5K", "min": 2500, "max": 5000, "orders": 0, "revenue": 0,
+   "orderShare": 0, "revenueShare": 0 }]
 ```
 
 ### `GET /api/revenue/by-category`
@@ -129,17 +205,16 @@ Params: `start_date` (30d), `end_date`, `limit` (default 10).
 
 ### `GET /api/customers/overview`
 
-Params: `start_date` (30d), `end_date`. `churnedChange` and `atRiskChange` are
-`null` because neither is observable for a prior period from a point-in-time
-status column. `churnedScope` states what the churn count covers.
+Params: `start_date`, `end_date`. `total` counts customers with a completed
+order in the window and `new` counts customers acquired in it, each against the
+prior window of equal length. `atRisk` counts live customers the churn model
+puts at `atRiskThreshold` or higher. `churned` is the all-time count from the
+account status, because no churn date is stored to scope it to a window.
 
 ```json
-{
-  "total": 0, "totalChange": 0,
-  "new": 0, "newChange": 0,
-  "churned": 0, "churnedChange": null, "churnedScope": "",
-  "atRisk": 0, "atRiskChange": null
-}
+{ "total": 0, "totalChange": 0, "new": 0, "newChange": 0,
+  "churned": 0, "churnedScope": "all time", "churnedChange": null,
+  "atRisk": 0, "atRiskThreshold": 0.5, "atRiskChange": null }
 ```
 
 ### `GET /api/customers/segments`
@@ -152,12 +227,17 @@ Params: `start_date` (30d), `end_date`.
 
 ### `GET /api/customers/cohorts`
 
-Params: `start_date` (default 365d), `end_date`. Monthly acquisition cohorts
-with retention per month offset. A month the cohort has not yet reached is
-`null`, never zero.
+Params: `end_date`. `start_date` is accepted and ignored. Monthly retention for
+the twelve most recent first-purchase cohorts. A customer belongs to the month
+of their first completed order, so month 0 is 100% by definition. Month k is the
+share of the cohort with a completed order k months later. Only whole months
+count, and months a cohort hasn't reached are `null`. Customers acquired before
+the first recorded order are left out, since their first purchase predates the
+data.
 
 ```json
-[ { "cohort": "YYYY-MM", "cohortSize": 0, "month0": 100, "month1": 0, "month2": null } ]
+[{ "cohort": "YYYY-MM-01", "label": "Nov 2025", "size": 0,
+   "retention": [100.0, 0, 0, null] }]
 ```
 
 ### `GET /api/customers/lifetime-value`
@@ -170,11 +250,23 @@ Params: `start_date`, `end_date`. Distribution across LTV bands.
 
 ### `GET /api/customers/acquisition`
 
-Params: `start_date` (default 365d), `end_date`. New customers per month by
-channel.
+Params: `start_date` (default 365d), `end_date`. New customers per whole bucket
+split by acquisition channel. The bucket size follows the window's length.
 
 ```json
-[ { "date": "YYYY-MM-DD", "channel": "", "count": 0 } ]
+{ "granularity": "month", "keys": ["Direct Sales", "..."],
+  "points": [{ "date": "YYYY-MM-DD", "label": "Dec 2025", "Direct Sales": 0 }] }
+```
+
+### `GET /api/customers/risk-value`
+
+No params. Every live customer's churn probability against their completed
+revenue over the last 12 months, for the scatter. Customers with no revenue in
+the year are left off the points and counted in `withoutRevenue`.
+
+```json
+{ "points": [{ "id": 0, "company": "", "segment": "smb", "riskScore": 0.0, "annualRevenue": 0 }],
+  "threshold": 0.5, "scored": 0, "withoutRevenue": 0 }
 ```
 
 ### `GET /api/customers/at-risk`
@@ -202,45 +294,57 @@ Params: `start_date` (30d), `end_date`. Funnel by stage. `conversionRate` is
 
 ### `GET /api/operations/pipeline-kpis`
 
-Params: `start_date` (30d), `end_date`. The `*Change` fields are `null`:
-pipeline rows carry current state rather than history, so a prior-period value
-cannot be reconstructed.
+Params: `start_date`, `end_date`. From each deal's stage history, each against
+the prior window of equal length. Win rate is deals won over deals won or lost
+among deals that closed in the window, and its change is in percentage points.
+Cycle time is days from creation to the win for deals won in the window.
 
 ```json
-{
-  "pipelineValue": 0, "pipelineChange": null,
-  "avgCycleTime": null, "cycleTimeChange": null,
-  "winRate": 0, "winRateChange": null,
-  "avgDealSize": 0, "dealSizeChange": null
-}
+{ "pipelineValue": 0, "pipelineChange": 0, "openDeals": 0,
+  "winRate": 0, "winRateChange": 0, "avgDealSize": 0, "dealSizeChange": 0,
+  "avgCycleTime": 0, "cycleTimeChange": 0, "dealsWon": 0, "dealsLost": 0 }
+```
+
+### `GET /api/operations/pipeline-flow`
+
+Params: `end_date`. How the deals created in the 365 days to `end_date` moved
+through the stages, as nodes and links for a Sankey diagram. Each link counts
+deals and carries their summed value. The links out of Lead add up to
+`created`.
+
+```json
+{ "nodes": [{ "name": "Lead" }, "...", { "name": "Won" }, { "name": "Lost" }, { "name": "Open" }],
+  "links": [{ "source": 0, "target": 1, "value": 0, "amount": 0 }],
+  "created": 0, "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD" }
 ```
 
 ### `GET /api/operations/sales-performance`
 
-Params: `start_date` (30d), `end_date`. `attainment` is `achieved / quota`,
-computed rather than shaped: this endpoint previously overwrote real per-rep
-revenue with a manufactured 145-to-61 distribution.
+Params: `start_date`, `end_date`. Every rep's completed bookings in the window
+against their annual quota prorated to the window's days, sorted by attainment.
 
 ```json
-[ { "id": 0, "name": "", "team": "", "region": "", "quota": 0, "achieved": 0,
-    "attainment": 0, "deals": 0 } ]
+[{ "id": 0, "name": "", "team": "Enterprise", "region": "", "quota": 0,
+   "periodQuota": 0, "achieved": 0, "deals": 0, "attainment": 0 }]
 ```
 
 ### `GET /api/operations/conversion-rates`
 
-No params. Stage-to-stage conversion across the whole pipeline.
+Params: `end_date`. Of the deals that left each stage in the 365 days to
+`end_date`, the share that moved to the next stage. Deals still in a stage are
+left out of its rate.
 
 ```json
-[ { "fromStage": "", "toStage": "", "rate": 0 } ]
+[{ "fromStage": "Lead", "toStage": "Qualified", "rate": 0, "exits": 0 }]
 ```
 
 ### `GET /api/operations/cycle-time`
 
-Params: `start_date` only. Average days per stage, with the sample size behind
-each average.
+Params: `end_date`. Average days deals spent in each stage, for stage exits in
+the 365 days to `end_date`, from stage history.
 
 ```json
-[ { "stage": "", "avgDays": 0, "count": 0 } ]
+[{ "stage": "Lead", "avgDays": 0, "count": 0 }]
 ```
 
 ### `GET /api/operations/opportunities`
@@ -270,18 +374,16 @@ endpoints report `available: false` rather than returning a number.
 
 ### `GET /api/forecasting/revenue`
 
-Params: `periods` (default 6, clamped to 1–24), `start_date`, `end_date`.
-Returns history followed by the forecast. The last actual month also carries a
-`predicted` value equal to its actual, so the dashed forecast line begins
-exactly where the solid history line ends. That join point has no interval,
-because it is a measurement rather than a prediction.
+Params: `periods` (default 6, at most 24), `start_date` to clip the plotted
+history. Monthly actuals, the backtest over the holdout months, and the
+forecast with 80% (`lowerBound` and `upperBound`) and 95% intervals. The
+intervals come from the holdout RMSE, widen with the square root of the
+horizon, and open from zero width at the last actual month.
 
 ```json
-[ { "date": "YYYY-MM-01", "actual": 0, "predicted": null, "lowerBound": null, "upperBound": null } ]
+[{ "date": "YYYY-MM-01", "actual": 0, "predicted": null, "lowerBound": null,
+   "upperBound": null, "lower95": null, "upper95": null, "backtest": 0 }]
 ```
-
-Bounds derive from holdout RMSE scaled by the square root of the horizon, so
-they widen with distance. `lowerBound` is never negative.
 
 ### `GET /api/forecasting/pipeline`
 
@@ -304,12 +406,13 @@ real recency from the feature frame.
 
 ### `GET /api/forecasting/kpis`
 
-Params: `start_date`, `end_date`.
+The first forecast month and its change against the last actual month, and the
+count of live customers at or above the risk threshold.
 
 ```json
-{ "predictedRevenue": 0, "predictedChange": 0, "atRiskCount": 0,
-  "atRiskChange": null, "modelAccuracy": 0, "accuracyChange": null,
-  "forecastPeriod": 6 }
+{ "predictedRevenue": 0, "predictedChange": 0, "predictedMonth": "YYYY-MM-01",
+  "atRiskCount": 0, "atRiskThreshold": 0.5, "atRiskChange": null,
+  "modelAccuracy": 0, "accuracyChange": null, "forecastPeriod": 6 }
 ```
 
 ### `GET /api/forecasting/seasonality`
@@ -330,7 +433,7 @@ window being viewed. It used to be varied by filter for appearances.
   "available": true,
   "accuracy": 0, "mape": 0, "r2Score": 0, "rmse": 0, "dataPoints": "21 mo",
   "revenue": {
-    "model": "Ridge regression on trend, seasonality, and 2 lags",
+    "model": "Ridge regression on trend, seasonality, quarter-end, and 2 lags",
     "validation": "chronological holdout",
     "mape": 0, "naiveMape": 0, "seasonalNaiveMape": 0, "improvementOverNaive": 0,
     "rmse": 0, "mae": 0, "r2Score": 0, "trainMonths": 0, "holdoutMonths": 0
@@ -353,14 +456,15 @@ model earns its keep.
 
 ### `GET /api/forecasting/revenue-at-risk`
 
-Params: `start_date`, `end_date`. Lifetime value bucketed by churn probability.
-Buckets sum to the totals.
+Completed revenue over the last 12 months from live customers in each churn
+risk tier. `total` and `totalCustomers` are the high and medium tiers together,
+the revenue actually at risk. The low tier is reported for context.
 
 ```json
-{
-  "highRisk":   { "value": 0, "customers": 0, "label": "", "threshold": "" },
-  "mediumRisk": { "value": 0, "customers": 0, "label": "", "threshold": "" },
-  "lowRisk":    { "value": 0, "customers": 0, "label": "", "threshold": "" },
-  "total": 0, "totalCustomers": 0
-}
+{ "highRisk":   { "value": 0, "customers": 0, "label": "High risk", "threshold": "65% or higher" },
+  "mediumRisk": { "value": 0, "customers": 0, "label": "Medium risk", "threshold": "50% to 65%" },
+  "lowRisk":    { "value": 0, "customers": 0, "label": "Low risk", "threshold": "Under 50%" },
+  "total": 0, "totalCustomers": 0, "scoredCustomers": 0,
+  "basis": "completed revenue in the last 12 months" }
 ```
+

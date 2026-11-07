@@ -3,9 +3,13 @@
 ## Requirements
 
 - **Python 3.11+**
-- **Node 20+**
-- **PostgreSQL 15+** — required, not optional. Most time-series queries use
-  `date_trunc`, which SQLite has no equivalent for.
+- **Node 22+**
+- **PostgreSQL 15+**. The application and CI run on it. The newer endpoints
+  also run on SQLite, which is how the unit tests exercise them, but
+  `/api/revenue/trends` uses `date_trunc` and needs PostgreSQL.
+
+`./scripts/setup-local.sh` checks for all three, creates the database, and
+installs both halves' dependencies.
 
 ## Docker
 
@@ -47,7 +51,7 @@ profile exports one globally for another project.
 ```bash
 cd frontend
 npm ci
-npm run dev                           # http://localhost:5173
+npm run dev                           # http://localhost:3000
 ```
 
 The dev server proxies `/api` to Flask on 5001, so both halves share an origin

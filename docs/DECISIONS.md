@@ -182,6 +182,11 @@ so the consistency checks run there rather than skipping.
 **Cost.** A contributor without PostgreSQL sees those tests skip. The unit tests
 still run, so a fresh clone is not blocked.
 
+**Amended 2026-11-06.** The newer endpoints group in pandas rather than with
+`date_trunc` and run on SQLite too, which is how the unit suite exercises them.
+Only `/api/revenue/trends` still needs PostgreSQL. The application and CI stay on
+PostgreSQL.
+
 ---
 
 ## 9. Same-origin single service
@@ -209,3 +214,77 @@ reachable over HTTP at all.
 
 **Cost.** Adding real data to this application would require auth first, not as
 a later hardening pass.
+
+---
+
+## 11. Churn is predicted forward from a cutoff, not read from the status column
+
+**Decision.** The churn model trains on every customer live at a cutoff 90
+days before the latest order. Their features use only transactions on or
+before the cutoff, and the label is whether they ordered in the 90 days after
+it. Live customers are then scored with features as of today.
+
+**Why.** The first model learned the status column. Customers marked churned
+had stopped buying, so recency separated them almost perfectly and the model
+reported 0.96 ROC AUC. It was answering "who already left," and every live
+customer looked unlike the people who had, so nearly all of them scored under
+10% and the at-risk list was empty in practice. The useful question is who
+stops next, and a label from after the cutoff against features from before it
+asks that without letting the future in. The feature builder had to become
+point in time for this to hold. It used to total every transaction whatever
+date it was given, and a test now pins that it doesn't.
+
+**Cost.** ROC AUC fell to about 0.78, which is the honest difficulty of the
+question. The training population is a quarter old by construction.
+
+---
+
+## 12. Revenue is compared with a year earlier, and quotas are prorated
+
+**Decision.** The comparison chart sets each bucket against the same bucket a
+year earlier, shifted 364 days for days and weeks so weekdays align. Headline
+figures still compare with the prior window of equal length. Rep attainment
+divides bookings by the annual quota times the window's share of a year.
+
+**Why.** The business is seasonal. Against the window just before, a December
+spike sits beside a November with none, and the difference is the calendar.
+Against a year earlier the spikes line up and the gap is growth. Attainment
+against the full annual quota put every rep near 25% on a 90-day view, which
+read as a sales team in crisis.
+
+**Cost.** Two comparison bases on one page, so each chart says which it uses.
+
+---
+
+## 13. Opportunities carry their stage history
+
+**Decision.** A `pipeline_stage_changes` table records each stage a deal
+entered and when, and `closed_at` records when it closed.
+
+**Why.** Without it the pipeline KPIs were null by necessity. Win rate, cycle
+time, days in each stage, the pipeline as it stood on a past date, and the flow
+from stage to stage all need to know when a deal moved. With it they are
+measured rather than estimated, and the pipeline change on the executive page
+compares two real days.
+
+**Cost.** One more table to seed and keep consistent with the opportunities,
+which the consistency suite checks.
+
+---
+
+## 14. Each chart's form follows its question, and every chart has a table
+
+**Decision.** Ranked bars instead of pies and donuts, small multiples instead
+of one tangled line chart, heatmaps for the cohort table and the daily
+calendar, a Sankey for the pipeline, and diverging bars for seasonality.
+Colors are fixed per entity, and every chart card has a table view with a CSV
+download.
+
+**Why.** A reader compares lengths along a shared baseline far better than
+angles or areas. A color that follows rank repaints an entity the moment a
+filter reorders the ranking. The table view is how anyone who can't use the
+chart gets the numbers, a screen reader user or a colorblind reader with a
+dense chart included.
+
+**Cost.** More chart components to maintain than a single generic chart, each
+with its own test.

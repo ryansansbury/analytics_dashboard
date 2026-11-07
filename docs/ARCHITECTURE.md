@@ -102,11 +102,23 @@ filter refetches rather than reusing a stale entry.
 makes the static build possible without a parallel code path: the transport
 changes, nothing above it does.
 
-**Charts.** Recharts, wrapped in project components (`AreaChart`, `BarChart`,
-`FunnelChart`, `PieChart`) so palette, axis formatting, gridlines, and tooltip
-behaviour are set in one place rather than per page. Chart colour tokens live in
-plain `:root` rather than Tailwind's `@theme`, because Tailwind v4 prunes theme
-tokens it cannot see referenced in markup and silently dropped two funnel colours.
+**Charts.** Project components in `components/charts`, most of them over
+Recharts and a few in plain SVG or HTML where that draws better: the sparkline,
+the calendar and cohort heatmaps, ranked bars, and quota attainment. The shared
+tooltip, legend, and axis styling live in `chrome.tsx`, and every entity's colour
+is fixed in `utils/colors.ts` so it never changes with rank. Chart colour tokens,
+including the validated heatmap ramp, live in plain `:root` rather than
+Tailwind's `@theme`, because Tailwind v4 prunes theme tokens it cannot see
+referenced in markup and once silently dropped two funnel colours.
+
+**Cards.** `ChartCard` gives every chart a title, a subtitle that says what the
+numbers are, a table view with a CSV download, and its own error boundary, so a
+chart that fails to draw blanks its card and not the page.
+
+**Calculations.** The endpoints added for these charts load plain rows and
+aggregate them with pandas in `app/analytics.py`. Each calculation is a pure
+function with tests that work the answer out by hand, and the same code runs on
+PostgreSQL and on the SQLite test database.
 
 ---
 
