@@ -1,282 +1,27 @@
 /**
- * TypeScript Type Definitions
+ * Response types for every endpoint the pages call.
  *
- * Centralized type definitions for the Analytics Dashboard frontend.
- * These interfaces define the shape of data flowing between the API
- * and React components.
- *
- * Organization:
- * - API Types: Generic response wrappers
- * - KPI Types: Key Performance Indicator structures
- * - Time Series: Temporal data points for charts
- * - Revenue Types: Revenue breakdowns and trends
- * - Customer Types: Customer profiles and segments
- * - Sales Types: Pipeline and sales rep data
- * - Forecast Types: Predictive analytics structures
- * - Filter Types: Global filter state definitions
- * - Component Props: Shared component interfaces
+ * Each interface describes what the Flask API actually returns, checked
+ * against the handlers in backend/app/routes. An earlier version declared
+ * shapes the API had never sent (a `revenueTrend` on the dashboard summary, a
+ * flat `confidence` on model performance), so the compiler approved code that
+ * rendered `undefined` on the page. Null appears wherever the API returns null
+ * for a figure it can't measure, and the UI shows a dash there, never a zero.
  */
 
 // ============================================================================
-// API Response Types
+// Filters
 // ============================================================================
 
-/** Generic API response wrapper (not currently used - API returns data directly) */
-export interface ApiResponse<T> {
-  data: T;
-  success: boolean;
-  message?: string;
-}
+export type DatePresetName = 'last7d' | 'last30d' | 'last90d' | 'ytd' | 'lastYear' | 'custom';
+export type Granularity = 'day' | 'week' | 'month';
 
-// ============================================================================
-// KPI (Key Performance Indicator) Types
-// ============================================================================
-
-/**
- * Individual KPI metric with current value and period-over-period comparison
- * Used in KPICard components across all dashboard pages
- */
-export interface KPI {
-  label: string;
-  value: number;
-  previousValue: number;
-  change: number;
-  changePercent: number;
-  format: 'currency' | 'number' | 'percent';
-  trend: 'up' | 'down' | 'neutral';
-}
-
-/** Collection of KPIs displayed on the executive dashboard */
-export interface DashboardKPIs {
-  totalRevenue: KPI;
-  totalCustomers: KPI;
-  avgOrderValue: KPI;
-  conversionRate: KPI;
-  pipelineValue: KPI;
-  customerGrowth: KPI;
-}
-
-// ============================================================================
-// Time Series Data
-// ============================================================================
-
-/** Generic time series data point for line/area charts */
-export interface TimeSeriesDataPoint {
-  date: string;
-  value: number;
-  previousValue?: number;
-}
-
-/** Revenue trend data point - used in revenue trend charts */
-export interface RevenueTrend {
-  date: string;
-  revenue: number;
-  orders: number;
-}
-
-// ============================================================================
-// Revenue Breakdown Types
-// ============================================================================
-
-/** Revenue breakdown by product category (donut chart) */
-export interface CategoryData {
-  category: string;
-  value: number;
-  percentage: number;
-}
-
-/** Revenue breakdown by sales channel */
-export interface ChannelData {
-  channel: string;
-  value: number;
-  percentage: number;
-}
-
-/** Revenue breakdown by geographic region */
-export interface RegionData {
-  region: string;
-  revenue: number;
-  customers: number;
-  growth: number;
-}
-
-// ============================================================================
-// Product Types
-// ============================================================================
-
-/** Product performance metrics for top products table */
-export interface Product {
-  id: number;
-  name: string;
-  category: string;
-  revenue: number;
-  unitsSold: number;
-  growth: number;
-  avgPrice: number;
-}
-
-// ============================================================================
-// Customer Types
-// ============================================================================
-
-/**
- * Customer profile with segmentation and lifecycle data
- * Segment tiers: enterprise (large), mid-market, smb (small business)
- * Status tracks customer health: active, at-risk (warning), churned (lost)
- */
-export interface Customer {
-  id: number;
-  name: string;
-  company: string;
-  segment: 'enterprise' | 'mid-market' | 'smb';
-  industry: string;
-  lifetimeValue: number;
-  status: 'active' | 'churned' | 'at-risk';
-  acquisitionDate: string;
-  region: string;
-  daysSinceActivity?: number;
-  riskScore?: number;
-}
-
-/** Customer segment summary for segment distribution charts */
-export interface CustomerSegment {
-  segment: string;
-  count: number;
-  revenue: number;
-  percentage: number;
-}
-
-/**
- * Cohort retention data - tracks customer retention over 12 months
- * Each month field (month0-month11) contains the retention percentage
- * month0 is always 100% (acquisition), subsequent months show retention
- */
-export interface CohortData {
-  cohort: string;
-  month0: number;
-  month1: number;
-  month2: number;
-  month3: number;
-  month4: number;
-  month5: number;
-  month6: number;
-  month7: number;
-  month8: number;
-  month9: number;
-  month10: number;
-  month11: number;
-}
-
-// ============================================================================
-// Sales Team Types
-// ============================================================================
-
-/**
- * Sales representative performance metrics
- * Attainment is calculated as (achieved / quota * 100)
- */
-export interface SalesRep {
-  id: number;
-  name: string;
-  team: string;
-  region: string;
-  quota: number;
-  achieved: number;
-  attainment: number;
-  deals: number;
-}
-
-// ============================================================================
-// Pipeline Types
-// ============================================================================
-
-/** Sales pipeline stage summary for funnel chart */
-export interface PipelineStage {
-  stage: string;
-  value: number;
-  count: number;
-  conversionRate: number;
-}
-
-/** Individual sales opportunity in the pipeline */
-export interface PipelineOpportunity {
-  id: number;
-  name: string;
-  customer: string;
-  amount: number;
-  stage: string;
-  probability: number;
-  expectedCloseDate: string;
-  salesRep: string;
-}
-
-// ============================================================================
-// Forecasting Types
-// ============================================================================
-
-/**
- * Forecast data point with prediction confidence bounds
- * Used in revenue forecasting chart with uncertainty visualization
- */
-export interface ForecastDataPoint {
-  date: string;
-  /** Measured revenue. Absent for future months. */
-  actual: number | null;
-  /** Model output. Absent for history, except the join point where it equals
-   *  the actual so the dashed line starts exactly where the solid one ends. */
-  predicted: number | null;
-  /** Uncertainty band from the model's holdout RMSE, widening with the
-   *  horizon. Null wherever there is nothing to be uncertain about: a measured
-   *  month, and the join. */
-  lowerBound: number | null;
-  upperBound: number | null;
-}
-
-/** Customer churn risk assessment for proactive retention */
-export interface ChurnRiskCustomer {
-  id: number;
-  name: string;
-  company: string;
-  segment: string;
-  riskScore: number;
-  lastActivity?: string;
-  daysSinceActivity: number;
-  lifetimeValue: number;
-  recommendation: string;
-}
-
-// ============================================================================
-// Dashboard Summary Type
-// ============================================================================
-
-/**
- * Complete dashboard summary response
- * Contains all data needed to render the executive dashboard in one API call
- */
-export interface DashboardSummary {
-  kpis: DashboardKPIs;
-  revenueTrend: RevenueTrend[];
-  revenueByCategory: CategoryData[];
-  topProducts: Product[];
-  pipelineSummary: PipelineStage[];
-  recentCustomers: Customer[];
-}
-
-// ============================================================================
-// Filter Types
-// ============================================================================
-
-/**
- * Date range selection for filtering dashboard data
- * Preset options provide quick selection (last 7 days, YTD, etc.)
- */
 export interface DateRange {
   startDate: string;
   endDate: string;
-  preset?: 'last7d' | 'last30d' | 'last90d' | 'ytd' | 'lastYear' | 'custom';
+  preset?: DatePresetName;
 }
 
-/** Global filter state shared across all dashboard pages */
 export interface FilterState {
   dateRange: DateRange;
   region?: string;
@@ -285,13 +30,348 @@ export interface FilterState {
 }
 
 // ============================================================================
-// Component Props
+// Shared shapes
 // ============================================================================
 
-/** Base props shared by chart components */
-export interface ChartProps {
-  data: unknown[];
-  loading?: boolean;
-  height?: number;
-  className?: string;
+/** A headline figure and its change against the prior window of equal length. */
+export interface Metric {
+  value: number | null;
+  previousValue?: number;
+  change?: number;
+  /** Null when there is no prior observation to compare against. */
+  changePercent: number | null;
+}
+
+export interface SeriesPoint {
+  date: string;
+  value: number | null;
+}
+
+/** One bucket of a series split by a dimension: `date`, `label`, then one number per key. */
+export type SplitPoint = { date: string; label: string } & Record<string, number | string>;
+
+export interface SplitSeries {
+  granularity: Granularity;
+  /** Largest first over the whole window. A key's position fixes its colour. */
+  keys: string[];
+  points: SplitPoint[];
+}
+
+// ============================================================================
+// Executive
+// ============================================================================
+
+export interface DashboardSummary {
+  kpis: {
+    totalRevenue: Metric;
+    totalCustomers: Metric;
+    totalOrders: Metric;
+    avgOrderValue: Metric;
+    pipelineValue: Metric;
+  };
+  /** One point per whole bucket of the window, for the tiles' sparklines. */
+  trends: {
+    revenue: SeriesPoint[];
+    customers: SeriesPoint[];
+    aov: SeriesPoint[];
+    pipeline: SeriesPoint[];
+  };
+  granularity: Granularity;
+  dateRange: {
+    startDate: string;
+    endDate: string;
+    previousStartDate: string;
+    previousEndDate: string;
+  };
+}
+
+// ============================================================================
+// Revenue
+// ============================================================================
+
+export interface ComparisonPoint {
+  date: string;
+  label: string;
+  previousDate: string;
+  previousLabel: string;
+  current: number;
+  previous: number;
+}
+
+export interface RevenueComparison {
+  granularity: Granularity;
+  points: ComparisonPoint[];
+  current: number;
+  previous: number;
+  change: number | null;
+  startDate: string;
+  endDate: string;
+}
+
+export interface RegionTrends extends SplitSeries {
+  totals: { region: string; revenue: number; previous: number; change: number | null }[];
+}
+
+export interface CalendarDay {
+  date: string;
+  week: number;
+  weekday: number;
+  revenue: number;
+}
+
+export interface RevenueCalendar {
+  startDate: string;
+  endDate: string;
+  days: CalendarDay[];
+  max: number;
+}
+
+export interface OrderSizeBand {
+  band: string;
+  min: number;
+  max: number | null;
+  orders: number;
+  revenue: number;
+  orderShare: number | null;
+  revenueShare: number | null;
+}
+
+export interface CategoryData {
+  category: string;
+  value: number;
+  percentage: number;
+}
+
+export interface ChannelData {
+  channel: string;
+  value: number;
+  percentage: number;
+}
+
+export interface Product {
+  id: number;
+  name: string;
+  category: string;
+  revenue: number;
+  unitsSold: number;
+  growth: number | null;
+  avgPrice: number;
+}
+
+// ============================================================================
+// Customers
+// ============================================================================
+
+export interface CustomerOverview {
+  total: number;
+  totalChange: number | null;
+  new: number;
+  newChange: number | null;
+  churned: number;
+  churnedScope: string;
+  churnedChange: number | null;
+  atRisk: number;
+  atRiskThreshold: number;
+  atRiskChange: number | null;
+}
+
+export interface CustomerSegment {
+  segment: string;
+  count: number;
+  revenue: number;
+  percentage: number;
+}
+
+export interface Cohort {
+  cohort: string;
+  label: string;
+  size: number;
+  /** Percent of the cohort ordering in each month after its first. Null where not reached yet. */
+  retention: (number | null)[];
+}
+
+export interface LifetimeValueBand {
+  range: string;
+  count: number;
+  percentage: number;
+}
+
+export interface ScoredCustomer {
+  id: number;
+  name: string;
+  company: string;
+  segment: string;
+  lifetimeValue: number;
+  annualRevenue: number;
+  riskScore: number;
+  daysSinceActivity: number;
+  recommendation: string;
+}
+
+export interface RiskPoint {
+  id: number;
+  company: string;
+  segment: string;
+  riskScore: number;
+  annualRevenue: number;
+}
+
+export interface RiskValue {
+  points: RiskPoint[];
+  threshold: number;
+  scored: number;
+  withoutRevenue: number;
+}
+
+// ============================================================================
+// Operations
+// ============================================================================
+
+export interface PipelineStage {
+  stage: string;
+  value: number;
+  count: number;
+  conversionRate: number | null;
+}
+
+export interface PipelineKpis {
+  pipelineValue: number;
+  pipelineChange: number | null;
+  openDeals: number;
+  winRate: number | null;
+  /** Percentage points, since win rate is already a percentage. */
+  winRateChange: number | null;
+  avgDealSize: number | null;
+  dealSizeChange: number | null;
+  avgCycleTime: number | null;
+  cycleTimeChange: number | null;
+  dealsWon: number;
+  dealsLost: number;
+}
+
+export interface PipelineFlow {
+  nodes: { name: string }[];
+  links: { source: number; target: number; value: number; amount: number }[];
+  created: number;
+  startDate: string;
+  endDate: string;
+}
+
+export interface StageDuration {
+  stage: string;
+  avgDays: number | null;
+  count: number;
+}
+
+export interface SalesRep {
+  id: number;
+  name: string;
+  team: string;
+  region: string;
+  quota: number;
+  periodQuota: number;
+  achieved: number;
+  deals: number;
+  attainment: number | null;
+}
+
+export interface PipelineOutlook {
+  month: string;
+  weighted: number;
+  best: number;
+  worst: number;
+}
+
+// ============================================================================
+// Forecasting
+// ============================================================================
+
+export interface ForecastPoint {
+  date: string;
+  actual: number | null;
+  predicted: number | null;
+  /** The 80% interval. */
+  lowerBound: number | null;
+  upperBound: number | null;
+  lower95: number | null;
+  upper95: number | null;
+  /** What the model predicted for a holdout month it never trained on. */
+  backtest: number | null;
+}
+
+export interface ForecastKpis {
+  predictedRevenue: number | null;
+  predictedChange: number | null;
+  predictedMonth: string | null;
+  atRiskCount: number;
+  atRiskThreshold: number;
+  atRiskChange: number | null;
+  modelAccuracy: number | null;
+  accuracyChange: number | null;
+  forecastPeriod: number;
+}
+
+export interface SeasonalityPoint {
+  month: string;
+  index: number;
+  trend: number | null;
+}
+
+export interface ModelPerformance {
+  available: boolean;
+  reason?: string;
+  accuracy?: number;
+  mape?: number;
+  r2Score?: number;
+  rmse?: number;
+  dataPoints?: string;
+  revenue?: {
+    model: string;
+    validation: string;
+    mape: number;
+    naiveMape: number;
+    seasonalNaiveMape: number;
+    improvementOverNaive: number;
+    rmse: number;
+    mae: number;
+    r2Score: number;
+    trainMonths: number;
+    holdoutMonths: number;
+  };
+  churn?: {
+    model: string;
+    label: string;
+    horizonDays: number;
+    cutoff: string | null;
+    validation: string;
+    rocAuc: number;
+    accuracy: number;
+    precision: number;
+    recall: number;
+    f1: number;
+    averagePrecision: number;
+    brierScore: number;
+    baseRate: number;
+    trainRows: number;
+    holdoutRows: number;
+    topFeatures: Record<string, number>;
+  };
+}
+
+export interface RiskTier {
+  value: number;
+  customers: number;
+  label: string;
+  threshold: string;
+}
+
+export interface RevenueAtRisk {
+  highRisk: RiskTier;
+  mediumRisk: RiskTier;
+  lowRisk: RiskTier;
+  /** High and medium together. */
+  total: number;
+  totalCustomers: number;
+  scoredCustomers: number;
+  basis: string;
 }

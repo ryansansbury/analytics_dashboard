@@ -64,19 +64,48 @@ describe('request construction', () => {
 
   it('url-encodes parameter values', async () => {
     const spy = mockFetch({})
-    await revenueApi.getTrends({ startDate: 'a b&c', endDate: '2026-01-01' }, 'month')
+    await revenueApi.getComparison({ startDate: 'a b&c', endDate: '2026-01-01' }, 'month')
     const url = lastUrl(spy)
     expect(url).toContain('a%20b%26c')
     expect(url).not.toContain('a b&c')
   })
 
-  it('passes granularity through and defaults it to day', async () => {
-    const spy = mockFetch([])
-    await revenueApi.getTrends(range, 'month')
-    expect(lastUrl(spy)).toContain('granularity=month')
+  it('puts granularity last, the order the snapshot keys on', async () => {
+    const spy = mockFetch({})
+    await revenueApi.getComparison(range, 'month')
+    expect(lastUrl(spy)).toBe(
+      '/api/revenue/comparison?start_date=2026-01-01&end_date=2026-06-30&granularity=month',
+    )
+  })
 
-    await revenueApi.getTrends(range)
-    expect(lastUrl(spy)).toContain('granularity=day')
+  it('sends only the end date for views that look back a fixed span', async () => {
+    for (const call of [
+      () => revenueApi.getCalendar(range),
+      () => customerApi.getCohorts(range),
+      () => operationsApi.getPipelineFlow(range),
+      () => operationsApi.getCycleTime(range),
+    ]) {
+      const spy = mockFetch({})
+      await call()
+      expect(lastUrl(spy)).toMatch(/\?end_date=2026-06-30$/)
+    }
+  })
+
+  it('sends no parameters for views that take no window', async () => {
+    let spy = mockFetch([])
+    await customerApi.getLifetimeValue()
+    expect(lastUrl(spy)).toBe('/api/customers/lifetime-value')
+    spy = mockFetch({})
+    await customerApi.getRiskValue()
+    expect(lastUrl(spy)).toBe('/api/customers/risk-value')
+  })
+
+  it('puts limit first on the at-risk list, as the snapshot does', async () => {
+    const spy = mockFetch([])
+    await customerApi.getAtRisk(range, 10)
+    expect(lastUrl(spy)).toBe(
+      '/api/customers/at-risk?limit=10&start_date=2026-01-01&end_date=2026-06-30',
+    )
   })
 })
 
@@ -120,18 +149,21 @@ describe('response handling', () => {
   })
 
   it('returns arrays intact', async () => {
-    mockFetch([{ date: '2026-01-01', revenue: 5 }])
-    await expect(revenueApi.getTrends(range)).resolves.toHaveLength(1)
+    mockFetch([{ category: 'Security Solutions', value: 5, percentage: 100 }])
+    await expect(revenueApi.getByCategory(range)).resolves.toHaveLength(1)
   })
 })
 
 describe('endpoint paths', () => {
   const cases: Array<[string, () => Promise<unknown>, string]> = [
     ['dashboard summary', () => dashboardApi.getSummary(range), '/dashboard/summary'],
-    ['dashboard kpis', () => dashboardApi.getKPIs(range), '/dashboard/kpis'],
-    ['revenue trends', () => revenueApi.getTrends(range), '/revenue/trends'],
+    ['revenue comparison', () => revenueApi.getComparison(range, 'week'), '/revenue/comparison'],
+    ['category trends', () => revenueApi.getCategoryTrends(range, 'week'), '/revenue/category-trends'],
+    ['region trends', () => revenueApi.getRegionTrends(range, 'week'), '/revenue/region-trends'],
+    ['order sizes', () => revenueApi.getOrderSizes(range), '/revenue/order-sizes'],
     ['revenue by category', () => revenueApi.getByCategory(range), '/revenue/by-category'],
-    ['revenue by region', () => revenueApi.getByRegion(range), '/revenue/by-region'],
+    ['pipeline kpis', () => operationsApi.getPipelineKpis(range), '/operations/pipeline-kpis'],
+    ['pipeline outlook', () => operationsApi.getOutlook(range), '/forecasting/pipeline'],
     ['health', () => healthApi.check(), '/health'],
   ]
 

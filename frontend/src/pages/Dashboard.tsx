@@ -1,243 +1,226 @@
-import { DollarSign, Users, TrendingUp, Target } from 'lucide-react';
+import { DollarSign, Users, ShoppingCart, Layers } from 'lucide-react';
+import clsx from 'clsx';
 import { Header } from '../components/layout/Header';
-import { KPICard } from '../components/cards/KPICard';
+import { KPICard, KPIGrid } from '../components/cards/KPICard';
 import { ChartCard } from '../components/cards/ChartCard';
-import { AreaChart } from '../components/charts/AreaChart';
-import { BarChart } from '../components/charts/BarChart';
-import { DonutChart } from '../components/charts/PieChart';
-import { FunnelChart } from '../components/charts/FunnelChart';
-import { DataTable } from '../components/tables/DataTable';
-import { formatCurrency } from '../utils/formatters';
+import { ComparisonChart } from '../components/charts/ComparisonChart';
+import { RankedBars } from '../components/charts/RankedBars';
+import { CalendarHeatmap } from '../components/charts/CalendarHeatmap';
+import {
+  daysInclusive,
+  formatChange,
+  formatCurrency,
+  formatDate,
+  formatDateRange,
+  formatShare,
+  getOrdinalColor,
+} from '../utils/formatters';
 import {
   useDashboardSummary,
-  useRevenueTrends,
-  useRevenueByCategory,
   usePipeline,
-  useTopProducts,
+  useRevenueByCategory,
+  useRevenueCalendar,
+  useRevenueComparison,
 } from '../hooks/useApi';
 import { useFilters } from '../hooks/useFilters';
+import type { ComparisonPoint } from '../types';
 
-// Determine appropriate granularity based on date range
-function getGranularity(preset?: string): 'day' | 'week' | 'month' {
-  switch (preset) {
-    case 'last7d':
-    case 'last30d':
-      return 'day';
-    case 'last90d':
-      return 'week';
-    case 'ytd':
-    case 'lastYear':
-    default:
-      return 'month';
-  }
-}
-
-// Get proper adjective form for granularity
-function getGranularityLabel(granularity: 'day' | 'week' | 'month'): string {
-  switch (granularity) {
-    case 'day':
-      return 'Daily';
-    case 'week':
-      return 'Weekly';
-    case 'month':
-      return 'Monthly';
-  }
-}
+const BUCKET_WORD = { day: 'Daily', week: 'Weekly', month: 'Monthly' } as const;
+const OPEN_STAGES = ['Lead', 'Qualified', 'Proposal', 'Negotiation'];
 
 export function Dashboard() {
   const { filters } = useFilters();
+  const { startDate, endDate } = filters.dateRange;
+  const comparison = `vs prior ${daysInclusive(startDate, endDate)} days`;
 
-  // Determine granularity based on date range
-  const granularity = getGranularity(filters.dateRange.preset);
+  const summary = useDashboardSummary();
+  const yoy = useRevenueComparison();
+  const categories = useRevenueByCategory();
+  const calendar = useRevenueCalendar();
+  const pipeline = usePipeline();
 
-  // Fetch data from API
-  const { data: summaryData, isLoading: summaryLoading } = useDashboardSummary();
-  const { data: revenueTrends, isLoading: trendsLoading } = useRevenueTrends(granularity);
-  const { data: categoryData, isLoading: categoryLoading } = useRevenueByCategory();
-  const { data: pipelineData, isLoading: pipelineLoading } = usePipeline();
-  const { data: topProducts, isLoading: productsLoading } = useTopProducts(8);
+  const kpis = summary.data?.kpis;
+  const trends = summary.data?.trends;
+  const values = (series?: { value: number | null }[]) => series?.map((p) => p.value);
 
-  // Transform data for charts
-  const kpis = summaryData?.kpis || {
-    totalRevenue: { value: 0, changePercent: 0 },
-    totalCustomers: { value: 0, changePercent: 0 },
-    avgOrderValue: { value: 0, changePercent: 0 },
-    pipelineValue: { value: 0, changePercent: 0 },
-  };
-
-  const trendData = (revenueTrends || []).map(item => ({
-    date: item.date,
-    revenue: item.revenue,
-    orders: item.orders,
-  }));
-
-  const chartCategoryData = (categoryData || [])
-    .map(item => ({
-      category: item.category,
-      value: item.value,
-      percentage: item.percentage,
-    }))
-    .sort((a, b) => b.percentage - a.percentage);
-
-  const funnelData = (pipelineData || []).map((item, index, arr) => ({
-    stage: item.stage,
-    value: item.value,
-    count: item.count,
-    conversionRate: index === 0 ? 100 : Math.round((item.count / arr[0].count) * 100),
-  }));
-
-  // Calculate win rate from pipeline
-  const closedWonStage = funnelData.find(s => s.stage === 'Closed Won');
-  const leadStage = funnelData.find(s => s.stage === 'Lead');
-  const winRate = leadStage && leadStage.count > 0 && closedWonStage
-    ? (closedWonStage.count / leadStage.count) * 100
-    : 3.2; // Default fallback
-
-  const productTableData = (topProducts || []).map((item) => ({
-    id: item.id,
-    name: item.name,
-    revenue: item.revenue,
-    units: item.unitsSold,
-  }));
+  const yoyChange = formatChange(yoy.data?.change);
+  const stages = (pipeline.data ?? []).filter((s) => OPEN_STAGES.includes(s.stage));
+  const openTotal = stages.reduce((sum, s) => sum + s.value, 0);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <Header
-        title="Executive Dashboard"
-        subtitle={`${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
-      />
-
-      {/* Content area with flexible row heights */}
-      <div className="flex-1 p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
-        {/* Row 1: KPIs - auto height */}
-        <div className="flex-shrink-0 grid grid-cols-4 gap-2">
+    <>
+      <Header title="Executive Overview" />
+      <div className="mx-auto max-w-[1680px] space-y-4 p-4 lg:p-6">
+        <KPIGrid>
           <KPICard
-            label="Total Revenue"
-            value={kpis.totalRevenue?.value ?? null}
-            changePercent={kpis.totalRevenue?.changePercent ?? null}
+            label="Revenue"
+            value={kpis?.totalRevenue.value ?? null}
+            changePercent={kpis?.totalRevenue.changePercent}
+            comparison={comparison}
             format="currency"
-            icon={<DollarSign className="h-4 w-4" />}
-            loading={summaryLoading}
+            trend={values(trends?.revenue)}
+            icon={<DollarSign className="h-3.5 w-3.5" />}
+            loading={summary.isLoading}
           />
           <KPICard
-            label="Total Customers"
-            value={kpis.totalCustomers?.value ?? null}
-            changePercent={kpis.totalCustomers?.changePercent ?? null}
+            label="Active customers"
+            value={kpis?.totalCustomers.value ?? null}
+            changePercent={kpis?.totalCustomers.changePercent}
+            comparison={comparison}
             format="number"
-            icon={<Users className="h-4 w-4" />}
-            loading={summaryLoading}
+            trend={values(trends?.customers)}
+            icon={<Users className="h-3.5 w-3.5" />}
+            loading={summary.isLoading}
           />
           <KPICard
-            label="Pipeline Value"
-            value={kpis.pipelineValue?.value ?? null}
-            changePercent={kpis.pipelineValue?.changePercent ?? null}
+            label="Average order"
+            value={kpis?.avgOrderValue.value ?? null}
+            changePercent={kpis?.avgOrderValue.changePercent}
+            comparison={comparison}
             format="currency"
-            icon={<TrendingUp className="h-4 w-4" />}
-            loading={summaryLoading}
+            trend={values(trends?.aov)}
+            icon={<ShoppingCart className="h-3.5 w-3.5" />}
+            loading={summary.isLoading}
           />
           <KPICard
-            label="Conversion Rate"
-            value={winRate}
-            changePercent={kpis.pipelineValue?.changePercent ? kpis.pipelineValue.changePercent * 0.3 : 5.2}
-            format="percent"
-            icon={<Target className="h-4 w-4" />}
-            loading={summaryLoading || pipelineLoading}
-          />
-        </div>
-
-        {/* Row 2: Revenue Trend + Category - 30% of remaining space */}
-        <div className="flex-[30] min-h-0 grid grid-cols-3 gap-2">
-          <div className="col-span-2">
-            <ChartCard
-              title="Revenue Trend"
-              subtitle={`${getGranularityLabel(granularity)} revenue over time`}
-              loading={trendsLoading}
-            >
-              <AreaChart
-                data={trendData}
-                xKey="date"
-                yKeys={['revenue']}
-                labels={{ revenue: 'Revenue' }}
-              />
-            </ChartCard>
-          </div>
-
-          <ChartCard
-            title="Revenue by Category"
-            subtitle="By product category"
-            loading={categoryLoading}
-          >
-            <DonutChart
-              data={chartCategoryData}
-              nameKey="category"
-              valueKey="value"
-            />
-          </ChartCard>
-        </div>
-
-        {/* Row 3: Pipeline + Products - 35% of remaining space */}
-        <div className="flex-[35] min-h-0 grid grid-cols-2 gap-2">
-          <ChartCard
-            title="Sales Pipeline"
-            subtitle="By stage"
-            loading={pipelineLoading}
-            actions={
-              <span className="text-xs text-gray-400">
-                Win Rate: <span className="text-white font-semibold">{winRate.toFixed(1)}%</span>
-              </span>
+            label="Open pipeline"
+            value={kpis?.pipelineValue.value ?? null}
+            changePercent={kpis?.pipelineValue.changePercent}
+            comparison={
+              summary.data ? `vs ${formatDate(summary.data.dateRange.previousEndDate, 'MMM d, yyyy')}` : undefined
             }
+            format="currency"
+            trend={values(trends?.pipeline)}
+            icon={<Layers className="h-3.5 w-3.5" />}
+            loading={summary.isLoading}
+          />
+        </KPIGrid>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <ChartCard
+            className="h-[330px] lg:col-span-2"
+            title="Revenue against last year"
+            subtitle={
+              yoy.data
+                ? `${BUCKET_WORD[yoy.data.granularity]} revenue from ${formatDateRange(yoy.data.startDate, yoy.data.endDate)}`
+                : undefined
+            }
+            actions={
+              yoyChange && (
+                <span
+                  className={clsx(
+                    'rounded-full px-2 py-0.5 text-xs font-medium tabular-nums',
+                    (yoy.data?.change ?? 0) >= 0 ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger',
+                  )}
+                >
+                  {yoyChange} on last year
+                </span>
+              )
+            }
+            loading={yoy.isLoading}
+            error={yoy.error}
+            table={{
+              filename: 'revenue-against-last-year',
+              rows: yoy.data?.points ?? [],
+              columns: [
+                { key: 'label', header: 'Period' },
+                { key: 'current', header: 'This year', align: 'right', format: (r: ComparisonPoint) => formatCurrency(r.current) },
+                { key: 'previous', header: 'Last year', align: 'right', format: (r: ComparisonPoint) => formatCurrency(r.previous) },
+                {
+                  key: 'change',
+                  header: 'Change',
+                  align: 'right',
+                  format: (r: ComparisonPoint) => formatChange(r.previous ? ((r.current - r.previous) / r.previous) * 100 : null) ?? '—',
+                  raw: (r: ComparisonPoint) => (r.previous ? ((r.current - r.previous) / r.previous) * 100 : ''),
+                },
+              ],
+            }}
           >
-            <FunnelChart data={funnelData} />
+            <ComparisonChart data={yoy.data?.points ?? []} monthly={yoy.data?.granularity === 'month'} />
           </ChartCard>
 
           <ChartCard
-            title="Top Products"
-            subtitle="By revenue"
-            loading={productsLoading}
+            className="h-[330px]"
+            title="Revenue by category"
+            subtitle="Share of revenue in the period"
+            loading={categories.isLoading}
+            error={categories.error}
+            flow
+            table={{
+              filename: 'revenue-by-category',
+              rows: categories.data ?? [],
+              columns: [
+                { key: 'category', header: 'Category' },
+                { key: 'value', header: 'Revenue', align: 'right', format: (r) => formatCurrency(r.value) },
+                { key: 'percentage', header: 'Share', align: 'right', format: (r) => `${r.percentage}%` },
+              ],
+            }}
           >
-            <DataTable
-              data={productTableData}
-              keyExtractor={(row) => row.id}
-              columns={[
-                { key: 'name', header: 'Product', sortable: true },
-                {
-                  key: 'revenue',
-                  header: 'Revenue',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => formatCurrency(value as number, true),
-                },
-                {
-                  key: 'units',
-                  header: 'Units',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => (value as number).toLocaleString(),
-                },
-              ]}
-              compact
+            <RankedBars
+              dense
+              rows={(categories.data ?? []).map((c) => ({
+                key: c.category,
+                label: c.category,
+                value: c.value,
+                display: formatCurrency(c.value, true),
+                share: formatShare(c.percentage),
+              }))}
+              labelWidth="46%"
             />
           </ChartCard>
         </div>
 
-        {/* Row 4: Daily Revenue - full width at bottom, 35% of remaining space */}
-        <div className="flex-[35] min-h-0">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <ChartCard
-            title={`${getGranularityLabel(granularity)} Revenue`}
-            subtitle="Comparison"
-            loading={trendsLoading}
+            className="h-[262px] lg:col-span-2"
+            title="Daily revenue"
+            subtitle={calendar.data ? `Every day from ${formatDateRange(calendar.data.startDate, calendar.data.endDate)}` : undefined}
+            loading={calendar.isLoading}
+            error={calendar.error}
+            flow
+            table={{
+              filename: 'daily-revenue',
+              rows: calendar.data?.days ?? [],
+              columns: [
+                { key: 'date', header: 'Date', format: (r) => formatDate(r.date, 'EEE, MMM d, yyyy') },
+                { key: 'revenue', header: 'Revenue', align: 'right', format: (r) => formatCurrency(r.revenue) },
+              ],
+            }}
           >
-            <BarChart
-              data={trendData}
-              xKey="date"
-              yKeys={['revenue']}
-              labels={{ revenue: 'Revenue' }}
-              colors={['var(--color-chart-2)']}
-              formatXAsDate
+            <CalendarHeatmap days={calendar.data?.days ?? []} />
+          </ChartCard>
+
+          <ChartCard
+            className="h-[262px]"
+            title="Open pipeline by stage"
+            subtitle={stages.length ? `${formatCurrency(openTotal, true)} across ${stages.reduce((n, s) => n + s.count, 0)} deals` : undefined}
+            loading={pipeline.isLoading}
+            error={pipeline.error}
+            flow
+            table={{
+              filename: 'open-pipeline',
+              rows: stages,
+              columns: [
+                { key: 'stage', header: 'Stage' },
+                { key: 'count', header: 'Deals', align: 'right' },
+                { key: 'value', header: 'Value', align: 'right', format: (r) => formatCurrency(r.value) },
+              ],
+            }}
+          >
+            <RankedBars
+              keepOrder
+              rows={stages.map((s, i) => ({
+                key: s.stage,
+                label: s.stage,
+                value: s.value,
+                display: formatCurrency(s.value, true),
+                detail: `${s.count} deals`,
+                color: getOrdinalColor(i, stages.length),
+              }))}
             />
           </ChartCard>
         </div>
       </div>
-    </div>
+    </>
   );
 }

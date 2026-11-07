@@ -5,11 +5,13 @@
  * `random.uniform()` removed, but the page still carried a hardcoded quarterly
  * "Growth Projections" series, a hardcoded "Segment Forecast" donut, and a
  * fallback metrics object of `{accuracy: 94.2, r2Score: 0.942, confidence: 95}`
- * that rendered whenever a request failed. It also read a `confidence` field
- * the endpoint has never returned, so the live page displayed a bare `%`.
+ * that rendered whenever a request failed. Later it labelled next month's
+ * forecast "Predicted Revenue (6mo)" and gave a constant six-month horizon a
+ * change badge computed from an unrelated figure.
  *
- * These tests pin the rule: every figure shown comes from the response, and a
- * missing figure renders a dash rather than a plausible-looking constant.
+ * These tests pin the rule: every figure shown comes from the response, the
+ * label says what the figure is, and a missing figure renders a dash rather
+ * than a plausible-looking constant.
  */
 
 import { render, screen, waitFor } from '@testing-library/react';
@@ -22,75 +24,83 @@ import { FilterProvider } from '../hooks/useFilters';
 
 const MODEL_PERFORMANCE = {
   available: true,
-  accuracy: 91.0,
-  mape: 3.58,
-  r2Score: -0.6266,
-  rmse: 3922055.22,
-  dataPoints: '21 mo',
   revenue: {
-    model: 'Ridge regression on trend, seasonality, and 2 lags',
+    model: 'Ridge regression on trend, seasonality, quarter-end, and 2 lags',
     validation: 'chronological holdout',
-    mape: 3.58,
-    naiveMape: 5.82,
-    seasonalNaiveMape: 9.88,
-    improvementOverNaive: 38.5,
-    rmse: 3922055.22,
-    mae: 3014762.38,
-    r2Score: -0.6266,
+    mape: 5.95,
+    naiveMape: 22.02,
+    seasonalNaiveMape: 20.83,
+    improvementOverNaive: 73.0,
+    rmse: 1210000,
+    mae: 990000,
+    r2Score: 0.8493,
     trainMonths: 16,
     holdoutMonths: 5,
   },
   churn: {
     model: 'Gradient-boosted classifier on RFM and account features',
+    label: 'no completed order in the 90 days after the cutoff',
+    horizonDays: 90,
+    cutoff: '2026-08-08',
     validation: 'stratified holdout',
-    rocAuc: 0.9586,
-    accuracy: 0.91,
-    precision: 0.7831,
-    recall: 0.7065,
-    f1: 0.7429,
-    averagePrecision: 0.8462,
-    brierScore: 0.0698,
-    baseRate: 0.185,
-    trainRows: 1500,
-    holdoutRows: 500,
-    topFeatures: { recency_days: 0.7144 },
+    rocAuc: 0.7794,
+    accuracy: 0.84,
+    precision: 0.6098,
+    recall: 0.3205,
+    f1: 0.42,
+    averagePrecision: 0.5117,
+    brierScore: 0.12,
+    baseRate: 0.1874,
+    trainRows: 1248,
+    holdoutRows: 417,
+    topFeatures: { recency_days: 0.2857, monetary_total: 0.2265, 'region_Asia Pacific': 0.01 },
   },
 };
 
 const FORECAST = [
-  { date: '2026-05-01', actual: 21957392.83, predicted: null, lowerBound: null, upperBound: null },
-  { date: '2026-06-01', actual: 25961517.33, predicted: null, lowerBound: null, upperBound: null },
-  { date: '2026-07-01', actual: 24092891.28, predicted: 24092891.28, lowerBound: null, upperBound: null },
-  { date: '2026-08-01', actual: null, predicted: 25335731.22, lowerBound: 21e6, upperBound: 29e6 },
-  { date: '2026-09-01', actual: null, predicted: 25892050.28, lowerBound: 21e6, upperBound: 30e6 },
+  { date: '2026-09-01', actual: 23796174.59, predicted: null, lowerBound: null, upperBound: null, lower95: null, upper95: null, backtest: 23017031.12 },
+  { date: '2026-10-01', actual: 20546280.63, predicted: 20546280.63, lowerBound: 20546280.63, upperBound: 20546280.63, lower95: 20546280.63, upper95: 20546280.63, backtest: 20076959.69 },
+  { date: '2026-11-01', actual: null, predicted: 18789541.4, lowerBound: 17e6, upperBound: 20.5e6, lower95: 16.4e6, upper95: 21.2e6, backtest: null },
 ];
 
-const SEGMENTS = [
-  { segment: 'enterprise', count: 261, revenue: 38091010.47, percentage: 54.1 },
-  { segment: 'mid-market', count: 221, revenue: 33165337.93, percentage: 45.9 },
-];
+const KPIS = {
+  predictedRevenue: 18789541.4,
+  predictedChange: -8.6,
+  predictedMonth: '2026-11-01',
+  atRiskCount: 190,
+  atRiskThreshold: 0.5,
+  atRiskChange: null,
+  modelAccuracy: 84,
+  accuracyChange: null,
+  forecastPeriod: 6,
+};
 
-/** Serve each endpoint the page asks for; `failing` empties the two under test. */
+const AT_RISK = {
+  highRisk: { value: 5100374, customers: 136, label: 'High risk', threshold: '65% or higher' },
+  mediumRisk: { value: 2196664, customers: 54, label: 'Medium risk', threshold: '50% to 65%' },
+  lowRisk: { value: 190000000, customers: 1470, label: 'Low risk', threshold: 'Under 50%' },
+  total: 7297039,
+  totalCustomers: 190,
+  scoredCustomers: 1660,
+  basis: 'completed revenue in the last 12 months',
+};
+
+/** Serve each endpoint the page asks for; `failing` fails the model and forecast requests. */
 function mockFetch(failing = false) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     const json = (body: unknown) =>
-      new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
     if (url.includes('/forecasting/model-performance')) {
       return failing ? new Response('{}', { status: 500 }) : json(MODEL_PERFORMANCE);
     }
-    if (url.includes('/forecasting/revenue-at-risk')) {
-      return json({ highRisk: { value: 0, customers: 0, label: '', threshold: '' },
-                    mediumRisk: { value: 0, customers: 0, label: '', threshold: '' },
-                    lowRisk: { value: 0, customers: 0, label: '', threshold: '' }, total: 0 });
+    if (url.includes('/forecasting/revenue-at-risk')) return json(AT_RISK);
+    if (url.includes('/forecasting/revenue')) return failing ? new Response('{}', { status: 500 }) : json(FORECAST);
+    if (url.includes('/forecasting/kpis')) return failing ? new Response('{}', { status: 500 }) : json(KPIS);
+    if (url.includes('/customers/risk-value')) {
+      return json({ points: [], threshold: 0.5, scored: 1660, withoutRevenue: 0 });
     }
-    if (url.includes('/forecasting/revenue')) return json(failing ? [] : FORECAST);
-    if (url.includes('/customers/segments')) return json(failing ? [] : SEGMENTS);
-    if (url.includes('/forecasting/kpis')) return json({});
     return json([]);
   }) as typeof fetch;
 }
@@ -106,81 +116,78 @@ function renderPage() {
           <Forecasting />
         </MemoryRouter>
       </FilterProvider>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
 beforeEach(() => mockFetch());
 
-describe('model performance tiles', () => {
-  it('shows the measured figures from the response', async () => {
+describe('the headline figures', () => {
+  it('names the month the forecast is for, not a six-month window', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('3.58%')).toBeInTheDocument());
-    expect(screen.getByText('5.82%')).toBeInTheDocument();   // naive baseline
-    expect(screen.getByText('0.959')).toBeInTheDocument();   // churn ROC AUC
-    expect(screen.getByText('16 mo')).toBeInTheDocument();   // training window
+    expect(await screen.findByText('November forecast')).toBeInTheDocument();
+    expect(screen.getByText('$18.8M')).toBeInTheDocument();
+    expect(screen.queryByText(/Predicted Revenue \(6mo\)/)).not.toBeInTheDocument();
   });
 
-  it('labels them so the forecast error is comparable to its baseline', async () => {
+  it('compares the forecast with the month before, signed', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('Forecast MAPE')).toBeInTheDocument());
-    expect(screen.getByText('Naive baseline')).toBeInTheDocument();
-    expect(screen.getByText('Churn ROC AUC')).toBeInTheDocument();
+    expect(await screen.findByText('-8.6%')).toBeInTheDocument();
+    expect(screen.getByText("vs October's actual revenue")).toBeInTheDocument();
   });
 
-  it('never renders the retired placeholder metrics', async () => {
+  it('counts only customers at or above the threshold as at risk', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('3.58%')).toBeInTheDocument());
-    for (const ghost of ['94.2%', '0.942', '95%', 'Confidence']) {
-      expect(screen.queryByText(ghost)).toBeNull();
-    }
+    expect(await screen.findByText('190')).toBeInTheDocument();
+    expect(screen.queryByText('1.7K')).not.toBeInTheDocument();
   });
 
-  it('renders a dash rather than a number when the request fails', async () => {
+  it('totals revenue at risk from the high and medium tiers only', async () => {
+    renderPage();
+    // The tile and the tier panel's total both show it.
+    expect((await screen.findAllByText('$7.3M')).length).toBe(2);
+  });
+
+  it('shows the backtest error beside its naive baseline', async () => {
+    renderPage();
+    const mape = `${(5.95).toFixed(1)}%`;
+    expect((await screen.findAllByText(mape)).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Repeating last month misses by 22\.0%/)).toBeInTheDocument();
+  });
+
+  it('never renders a forecast-period badge', async () => {
+    renderPage();
+    await screen.findByText('November forecast');
+    expect(screen.queryByText('Forecast Period')).not.toBeInTheDocument();
+  });
+
+  it('renders dashes, not constants, when the requests fail', async () => {
     mockFetch(true);
     renderPage();
-    await waitFor(() => expect(screen.getAllByText('—').length).toBeGreaterThan(0));
-    // The specific regression: `undefined%` reached production as a bare "%".
-    expect(screen.queryByText('%')).toBeNull();
-    expect(screen.queryByText('undefined%')).toBeNull();
+    await waitFor(() => expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2));
+    expect(screen.queryByText('94.2%')).not.toBeInTheDocument();
+    expect(screen.queryByText('$18.8M')).not.toBeInTheDocument();
   });
 });
 
-describe('quarterly revenue is derived, not authored', () => {
-  // FORECAST spans May, Jun, Jul actual and Aug, Sep predicted. That makes
-  // Q2 2026 a two-month quarter and Q3 2026 a complete one.
-  it('drops a quarter the series only partly covers', async () => {
+describe('how the models were checked', () => {
+  it('reports both models from the response', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('Quarterly Revenue')).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByText('Q3 2026')).toBeInTheDocument());
-    // Q2 holds only May and June here. Plotted, it reads as revenue a third
-    // lower than the quarter beside it, which is the partial-period defect
-    // app/periods.py exists to prevent, at quarterly granularity.
-    expect(screen.queryByText('Q2 2026')).toBeNull();
+    expect(await screen.findByText('0.78')).toBeInTheDocument();
+    expect(screen.getByText('19%')).toBeInTheDocument();
+    expect(screen.getByText('This model')).toBeInTheDocument();
+    expect(screen.getByText('Repeat last month')).toBeInTheDocument();
   });
 
-  it('counts the join month once, as actual', async () => {
+  it('says what the churn label means and when it was cut', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('Q3 2026')).toBeInTheDocument());
-    // 2026-07 carries both an actual and a predicted equal to it. Counting it
-    // in both buckets would inflate Q3 by a full month.
-    const july = FORECAST.find((r) => r.date === '2026-07-01')!;
-    expect(july.actual).toBe(july.predicted);
-    const q3 = july.actual! + 25335731.22 + 25892050.28;
-    expect(q3).toBeCloseTo(75320672.78, 2);
+    expect(await screen.findByText(/as they stood on Aug 8, 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/ordered in the 90 days after/)).toBeInTheDocument();
   });
 
-  it('no longer shows the invented quarterly figures', async () => {
+  it('puts the features in words', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText('Quarterly Revenue')).toBeInTheDocument());
-    expect(screen.queryByText('Growth Projections')).toBeNull();
-  });
-});
-
-describe('segment revenue comes from the customers endpoint', () => {
-  it('titles the card for what it actually shows', async () => {
-    renderPage();
-    await waitFor(() => expect(screen.getByText('Revenue by Segment')).toBeInTheDocument());
-    expect(screen.queryByText('Segment Forecast')).toBeNull();
+    expect(await screen.findByText('Days since last order')).toBeInTheDocument();
+    expect(screen.getByText('Region: Asia Pacific')).toBeInTheDocument();
   });
 });

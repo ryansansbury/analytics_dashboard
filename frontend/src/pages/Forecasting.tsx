@@ -1,345 +1,326 @@
-import { TrendingUp, AlertCircle, BarChart3, Calendar } from 'lucide-react';
+import { CalendarClock, Target, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { format, parseISO, subMonths } from 'date-fns';
 import { Header } from '../components/layout/Header';
-import { KPICard } from '../components/cards/KPICard';
-import { ChartCard } from '../components/cards/ChartCard';
-import { AreaChart } from '../components/charts/AreaChart';
-import { BarChart } from '../components/charts/BarChart';
-import { DonutChart } from '../components/charts/PieChart';
-import { DataTable } from '../components/tables/DataTable';
-import { formatCurrency } from '../utils/formatters';
-import { useRevenueForecast, useChurnRisk, useSeasonality, useForecastingKpis, useModelPerformance, useRevenueAtRisk, useCustomerSegments } from '../hooks/useApi';
-import { useFilters } from '../hooks/useFilters';
+import { KPICard, KPIGrid } from '../components/cards/KPICard';
+import { ChartCard, StatCard } from '../components/cards/ChartCard';
+import { ForecastChart } from '../components/charts/ForecastChart';
+import { RankedBars } from '../components/charts/RankedBars';
+import { RiskScatter } from '../components/charts/RiskScatter';
+import { SeasonalityChart } from '../components/charts/SeasonalityChart';
+import { formatCurrency, formatDate, formatMonthYear } from '../utils/formatters';
+import { labelFor } from '../utils/colors';
+import {
+  useForecastingKpis,
+  useModelPerformance,
+  useRevenueAtRisk,
+  useRevenueForecast,
+  useRiskValue,
+  useSeasonality,
+} from '../hooks/useApi';
+import type { ForecastPoint, RiskPoint } from '../types';
+
+/** Feature names from the model, in words. */
+const FEATURE_WORDS: Record<string, string> = {
+  recency_days: 'Days since last order',
+  monetary_total: 'Total spend',
+  monetary_avg: 'Average order size',
+  tenure_days: 'Time as a customer',
+  spend_trend: 'Share of spend in the last 90 days',
+  refund_rate: 'Refund rate',
+  frequency: 'Number of orders',
+  active_months: 'Months with an order',
+};
+
+/** One-hot columns arrive as "region_Asia Pacific", named for the field they came from. */
+const CATEGORICAL: [string, string][] = [
+  ['acquisition_channel_', 'Channel'],
+  ['segment_', 'Segment'],
+  ['industry_', 'Industry'],
+  ['region_', 'Region'],
+];
+
+function featureLabel(name: string): string {
+  if (FEATURE_WORDS[name]) return FEATURE_WORDS[name];
+  for (const [prefix, field] of CATEGORICAL) {
+    if (name.startsWith(prefix)) return `${field}: ${labelFor(name.slice(prefix.length))}`;
+  }
+  return name;
+}
 
 export function Forecasting() {
-  const { filters } = useFilters();
+  const kpis = useForecastingKpis();
+  const model = useModelPerformance();
+  const forecast = useRevenueForecast();
+  const seasonality = useSeasonality();
+  const risk = useRiskValue();
+  const atRisk = useRevenueAtRisk();
 
-  // Fetch real data from API - all data varies by selected date range
-  const { data: revenueForecast, isLoading: forecastLoading } = useRevenueForecast(6);
-  const { data: churnRiskData, isLoading: churnLoading } = useChurnRisk(17);
-  const { data: seasonalityData, isLoading: seasonalityLoading } = useSeasonality();
-  const { data: kpis, isLoading: kpisLoading } = useForecastingKpis();
-  const { data: modelPerformance, isLoading: modelLoading } = useModelPerformance();
-  const { data: revenueAtRisk, isLoading: riskLoading } = useRevenueAtRisk();
-  const { data: customerSegments, isLoading: segmentsLoading } = useCustomerSegments();
+  const k = kpis.data;
+  const revenue = model.data?.revenue;
+  const churn = model.data?.churn;
+  const tiers = atRisk.data;
+  const modelRows = [
+    ...(revenue
+      ? [
+          { measure: 'Forecast error, this model', value: `${revenue.mape.toFixed(1)}%` },
+          { measure: 'Forecast error, same month last year', value: `${revenue.seasonalNaiveMape.toFixed(1)}%` },
+          { measure: 'Forecast error, repeat last month', value: `${revenue.naiveMape.toFixed(1)}%` },
+        ]
+      : []),
+    ...(churn
+      ? [
+          { measure: 'Churn ROC AUC', value: churn.rocAuc.toFixed(3) },
+          { measure: 'Churn precision', value: `${(churn.precision * 100).toFixed(1)}%` },
+          { measure: 'Churn recall', value: `${(churn.recall * 100).toFixed(1)}%` },
+          { measure: 'Churn base rate', value: `${(churn.baseRate * 100).toFixed(1)}%` },
+          ...Object.entries(churn.topFeatures).map(([name, weight]) => ({
+            measure: `Churn driver, ${featureLabel(name)}`,
+            value: `${(weight * 100).toFixed(1)}%`,
+          })),
+        ]
+      : []),
+  ];
 
-  // Transform forecast data
-  const forecastData = (revenueForecast || []).map(item => ({
-    date: item.date,
-    actual: item.actual,
-    predicted: item.predicted,
-    lowerBound: item.lowerBound,
-    upperBound: item.upperBound,
-  }));
-
-  // Transform churn risk data
-  const churnData = (churnRiskData || []).map(customer => ({
-    id: customer.id,
-    company: customer.company,
-    segment: customer.segment,
-    ltv: customer.lifetimeValue,
-    riskScore: customer.riskScore,
-    daysSinceActivity: customer.daysSinceActivity,
-    recommendation: customer.recommendation,
-  }));
-
-  // Measured metrics only. This object used to fall back to a literal
-  // {accuracy: 94.2, r2Score: 0.942, confidence: 95} whenever the request
-  // failed, which is the same fabrication the backend was rebuilt to remove,
-  // surviving in the frontend. A failed request now renders a dash.
-  //
-  // The tiles below deliberately show MAPE against the naive baseline rather
-  // than R². R² on a five-month chronological holdout of a near-flat series is
-  // negative here (-0.63) while MAPE is 3.58%, because R² measures against the
-  // holdout's own mean and a flat window makes that mean hard to beat. Both are
-  // real and both stay in /api/forecasting/model-performance; the pair that
-  // actually tells you whether the model is worth running is error against the
-  // baseline you would otherwise use.
-  const revenueMetrics = modelPerformance?.revenue;
-  const churnMetrics = modelPerformance?.churn;
-  const pct = (v?: number) => (v == null ? '—' : `${v.toFixed(2)}%`);
-
-  // Quarterly actual against quarterly forecast, aggregated from the same
-  // series the chart above plots. A month counts as actual when it has one and
-  // as projected otherwise, so the join month is never counted twice.
-  //
-  // Quarters the series only partly covers are dropped. This is the same rule
-  // app/periods.py applies to months, and it was missing here: under a 90-day
-  // window the series opened mid-quarter and ended one month into the next, so
-  // the first bar showed two thirds of a quarter and the last showed one third,
-  // and the chart read as revenue collapsing at both ends.
-  //
-  // The two series stack rather than sit side by side. A quarter is almost
-  // always wholly historical or wholly forecast, so grouped bars left every
-  // quarter but the crossover with one empty slot, which reads as missing data.
-  const growthProjections = (() => {
-    const buckets = new Map<
-      string,
-      { quarter: string; historical: number; projected: number; months: number }
-    >();
-    for (const row of revenueForecast || []) {
-      const date = new Date(`${row.date}T00:00:00`);
-      const key = `Q${Math.floor(date.getMonth() / 3) + 1} ${date.getFullYear()}`;
-      const bucket = buckets.get(key) ?? { quarter: key, historical: 0, projected: 0, months: 0 };
-      bucket.months += 1;
-      if (row.actual != null) bucket.historical += row.actual;
-      else if (row.predicted != null) bucket.projected += row.predicted;
-      buckets.set(key, bucket);
-    }
-    return [...buckets.values()].filter((b) => b.months === 3);
-  })();
-
-  // Real revenue by segment for the selected window. Previously four invented
-  // rows whose percentages the donut then computed, so the chart looked derived
-  // when nothing underneath it was.
-  const segmentForecast = (customerSegments || []).map((s) => ({
-    segment: s.segment.replace(/(^|-)([a-z])/g, (_, sep, ch) => (sep ? ' ' : '') + ch.toUpperCase()),
-    value: s.revenue,
-  }));
-
-  // No invented fallback: an empty series renders as an empty chart, which is
-  // the honest signal that the request failed.
-  const seasonalData = seasonalityData || [];
+  const predicted = k?.predictedMonth ? parseISO(k.predictedMonth) : null;
+  const month = predicted ? format(predicted, 'MMMM') : null;
+  const priorMonth = predicted ? format(subMonths(predicted, 1), 'MMMM') : null;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <Header
-        title="Forecasting"
-        subtitle={`${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
-      />
-
-      {/* Content area with fixed row heights */}
-      <div className="flex-1 p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
-        {/* Row 1: KPIs - fixed height */}
-        <div className="flex-shrink-0 grid grid-cols-4 gap-2">
+    <>
+      <Header title="Forecasting" subtitle="Models trained on all history and scored as of the latest data" />
+      <div className="mx-auto max-w-[1680px] space-y-4 p-4 lg:p-6">
+        <KPIGrid>
           <KPICard
-            label="Predicted Revenue (6mo)"
-            value={kpis?.predictedRevenue ?? null}
-            changePercent={kpis?.predictedChange ?? null}
+            label={month ? `${month} forecast` : 'Next month forecast'}
+            value={k?.predictedRevenue ?? null}
+            changePercent={k?.predictedChange}
+            comparison={priorMonth ? `vs ${priorMonth}'s actual revenue` : undefined}
             format="currency"
-            icon={<TrendingUp className="h-4 w-4" />}
-            loading={kpisLoading}
+            icon={<CalendarClock className="h-3.5 w-3.5" />}
+            loading={kpis.isLoading}
           />
           <KPICard
-            label="At-Risk Customers"
-            value={kpis?.atRiskCount ?? (churnData.length || null)}
-            changePercent={kpis?.atRiskChange ?? null}
-            format="number"
-            icon={<AlertCircle className="h-4 w-4" />}
-            loading={kpisLoading || churnLoading}
-          />
-          <KPICard
-            label="Model Accuracy"
-            value={kpis?.modelAccuracy ?? null}
-            changePercent={kpis?.accuracyChange ?? null}
+            label="Forecast error"
+            value={revenue?.mape ?? null}
+            caption={revenue ? `Repeating last month misses by ${revenue.naiveMape.toFixed(1)}%` : undefined}
             format="percent"
-            icon={<BarChart3 className="h-4 w-4" />}
-            loading={kpisLoading}
+            icon={<Target className="h-3.5 w-3.5" />}
+            loading={model.isLoading}
           />
           <KPICard
-            label="Forecast Period"
-            value={kpis?.forecastPeriod ?? null}
-            changePercent={kpis?.predictedChange ? kpis.predictedChange * 0.1 : 1.5}
-            format="number"
-            icon={<Calendar className="h-4 w-4" />}
+            label="Customers at risk"
+            value={k?.atRiskCount ?? null}
+            caption={k ? `${Math.round(k.atRiskThreshold * 100)}% or higher chance of no order in 90 days` : undefined}
+            icon={<AlertTriangle className="h-3.5 w-3.5" />}
+            loading={kpis.isLoading}
           />
+          <KPICard
+            label="Revenue at risk"
+            value={tiers?.total ?? null}
+            caption="Their revenue over the last 12 months"
+            format="currency"
+            icon={<ShieldAlert className="h-3.5 w-3.5" />}
+            loading={atRisk.isLoading}
+          />
+        </KPIGrid>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <ChartCard
+            className="h-[400px] lg:col-span-2"
+            title="Revenue forecast"
+            subtitle={
+              revenue
+                ? `Six months ahead. Backtested on ${revenue.holdoutMonths} held-out months and ${revenue.improvementOverNaive.toFixed(0)}% more accurate than repeating last month`
+                : 'Six months ahead'
+            }
+            loading={forecast.isLoading}
+            error={forecast.error}
+            table={{
+              filename: 'revenue-forecast',
+              rows: forecast.data ?? [],
+              columns: [
+                { key: 'date', header: 'Month', format: (r: ForecastPoint) => formatMonthYear(r.date) },
+                { key: 'actual', header: 'Actual', align: 'right', format: (r: ForecastPoint) => (r.actual == null ? '' : formatCurrency(r.actual)) },
+                { key: 'backtest', header: 'Backtest', align: 'right', format: (r: ForecastPoint) => (r.backtest == null ? '' : formatCurrency(r.backtest)) },
+                { key: 'predicted', header: 'Forecast', align: 'right', format: (r: ForecastPoint) => (r.predicted == null || r.actual != null ? '' : formatCurrency(r.predicted)) },
+                { key: 'lowerBound', header: '80% low', align: 'right', format: (r: ForecastPoint) => (r.actual != null || r.lowerBound == null ? '' : formatCurrency(r.lowerBound)) },
+                { key: 'upperBound', header: '80% high', align: 'right', format: (r: ForecastPoint) => (r.actual != null || r.upperBound == null ? '' : formatCurrency(r.upperBound)) },
+                { key: 'lower95', header: '95% low', align: 'right', format: (r: ForecastPoint) => (r.actual != null || r.lower95 == null ? '' : formatCurrency(r.lower95)) },
+                { key: 'upper95', header: '95% high', align: 'right', format: (r: ForecastPoint) => (r.actual != null || r.upper95 == null ? '' : formatCurrency(r.upper95)) },
+              ],
+            }}
+          >
+            <ForecastChart data={forecast.data ?? []} />
+          </ChartCard>
+
+          <ChartCard
+            className="h-[400px]"
+            title="Seasonality"
+            subtitle="Each calendar month against an average month over two years"
+            loading={seasonality.isLoading}
+            error={seasonality.error}
+            table={{
+              filename: 'seasonality',
+              rows: seasonality.data ?? [],
+              columns: [
+                { key: 'month', header: 'Month' },
+                { key: 'index', header: 'Index', align: 'right', format: (r) => r.index.toFixed(2) },
+              ],
+            }}
+          >
+            <SeasonalityChart data={seasonality.data ?? []} />
+          </ChartCard>
         </div>
 
-        {/* Row 2: Revenue Forecast + Seasonality - 30% (matching dashboard) */}
-        <div className="flex-[30] min-h-0 grid grid-cols-3 gap-2">
-          <div className="col-span-2">
-            <ChartCard
-              title="Revenue Forecast"
-              subtitle="6-month ML prediction"
-              loading={forecastLoading}
-            >
-              <div className="mb-2 flex items-center gap-4 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-0.5" style={{ backgroundColor: 'var(--color-chart-1)' }} />
-                  <span className="text-gray-400">Actual</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-0.5" style={{ backgroundImage: 'linear-gradient(to right, var(--color-chart-1) 50%, transparent 50%)', backgroundSize: '4px 2px' }} />
-                  <span className="text-gray-400">Predicted</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className="w-4 h-2.5 rounded-sm"
-                    style={{ backgroundColor: 'var(--color-chart-1)', opacity: 0.14 }}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <ChartCard
+            className="h-[440px] lg:col-span-2"
+            title="Churn risk against customer value"
+            subtitle={
+              risk.data?.scored != null
+                ? `All ${risk.data.scored.toLocaleString()} live customers. Up and to the right is worth a call this week`
+                : undefined
+            }
+            loading={risk.isLoading}
+            error={risk.error}
+            table={{
+              filename: 'churn-risk-by-customer',
+              rows: [...(risk.data?.points ?? [])].sort((a, b) => b.riskScore - a.riskScore),
+              columns: [
+                { key: 'company', header: 'Account' },
+                { key: 'segment', header: 'Segment', format: (r: RiskPoint) => labelFor(r.segment) },
+                { key: 'riskScore', header: 'Churn probability', align: 'right', format: (r: RiskPoint) => `${Math.round(r.riskScore * 100)}%` },
+                { key: 'annualRevenue', header: 'Last 12 months', align: 'right', format: (r: RiskPoint) => formatCurrency(r.annualRevenue) },
+              ],
+            }}
+          >
+            <RiskScatter points={risk.data?.points ?? []} threshold={risk.data?.threshold ?? 0.5} />
+          </ChartCard>
+
+          <ChartCard
+            className="h-[440px]"
+            title="Revenue at risk"
+            subtitle="Last 12 months of revenue from customers in each risk tier"
+            loading={atRisk.isLoading}
+            error={atRisk.error}
+            flow
+            table={{
+              filename: 'revenue-at-risk',
+              rows: tiers ? [tiers.highRisk, tiers.mediumRisk, tiers.lowRisk] : [],
+              columns: [
+                { key: 'label', header: 'Tier' },
+                { key: 'threshold', header: 'Churn probability' },
+                { key: 'customers', header: 'Customers', align: 'right' },
+                { key: 'value', header: 'Revenue', align: 'right', format: (r) => formatCurrency(r.value) },
+              ],
+            }}
+          >
+            {tiers && (
+              <div className="space-y-5">
+                <RankedBars
+                  keepOrder
+                  rows={[
+                    { tier: tiers.highRisk, color: 'var(--color-status-critical)' },
+                    { tier: tiers.mediumRisk, color: 'var(--color-status-serious)' },
+                  ].map(({ tier, color }) => ({
+                    key: tier.label,
+                    label: tier.label,
+                    value: tier.value,
+                    display: formatCurrency(tier.value, true),
+                    detail: `${tier.customers} customers, ${tier.threshold}`,
+                    color,
+                  }))}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <StatCard title="At risk" value={formatCurrency(tiers.total, true)} subtitle={`${tiers.totalCustomers} customers`} />
+                  <StatCard
+                    title="Low risk"
+                    value={formatCurrency(tiers.lowRisk.value, true)}
+                    subtitle={`${tiers.lowRisk.customers.toLocaleString()} customers`}
                   />
-                  <span className="text-gray-400">Forecast range</span>
                 </div>
+                <p className="text-[11px] leading-relaxed text-gray-500">
+                  Risk is the churn model's probability that a customer places no order in the next 90 days. The tiers
+                  count what those customers spent over the last year. That is what losing them would cost.
+                </p>
               </div>
-              <AreaChart
-                data={forecastData.filter(d => d.actual != null || d.predicted != null)}
-                xKey="date"
-                yKeys={['actual', 'predicted']}
-                labels={{ actual: 'Actual Revenue', predicted: 'Predicted Revenue' }}
-                colors={['var(--color-chart-1)', 'var(--color-chart-1)']}
-                showLegend={false}
-                dashedKeys={['predicted']}
-                band={{ lower: 'lowerBound', upper: 'upperBound', label: 'Forecast range' }}
-              />
-            </ChartCard>
-          </div>
-
-          <ChartCard
-            title="Seasonal Index"
-            subtitle="Monthly pattern"
-            loading={seasonalityLoading}
-          >
-            <BarChart
-              data={seasonalData}
-              xKey="month"
-              yKeys={['index']}
-              labels={{ index: 'Index' }}
-              formatY="number"
-            />
+            )}
           </ChartCard>
         </div>
 
-        {/* Row 3: Growth Projections + Model Performance + Segment Forecast - 30% */}
-        <div className="flex-[30] min-h-0 grid grid-cols-3 gap-2">
-          <ChartCard
-            title="Quarterly Revenue"
-            subtitle="Actual and forecast"
-            loading={forecastLoading}
-          >
-            <BarChart
-              data={growthProjections}
-              xKey="quarter"
-              yKeys={['historical', 'projected']}
-              labels={{ historical: 'Actual', projected: 'Forecast' }}
-              formatY="currency"
-              stacked
-              colors={['var(--color-chart-1)', 'var(--color-chart-2)']}
-            />
-          </ChartCard>
-
-          <ChartCard title="Model Performance" subtitle="Measured on holdout" loading={modelLoading}>
-            <div className="h-full grid grid-cols-2 gap-3 content-center">
-              <div className="text-center p-2 bg-gray-800/50 rounded-lg">
-                <div className="text-2xl font-bold text-white">{pct(revenueMetrics?.mape)}</div>
-                <div className="text-xs text-gray-400">Forecast MAPE</div>
-              </div>
-              <div className="text-center p-2 bg-gray-800/50 rounded-lg">
-                <div className="text-2xl font-bold text-white">{pct(revenueMetrics?.naiveMape)}</div>
-                <div className="text-xs text-gray-400">Naive baseline</div>
-              </div>
-              <div className="text-center p-2 bg-gray-800/50 rounded-lg">
-                <div className="text-2xl font-bold text-white">
-                  {churnMetrics?.rocAuc?.toFixed(3) ?? '—'}
-                </div>
-                <div className="text-xs text-gray-400">Churn ROC AUC</div>
-              </div>
-              <div className="text-center p-2 bg-gray-800/50 rounded-lg">
-                <div className="text-2xl font-bold text-white">
-                  {revenueMetrics?.trainMonths ?? '—'} mo
-                </div>
-                <div className="text-xs text-gray-400">Training window</div>
-              </div>
+        <ChartCard
+          title="How the models were checked"
+          subtitle="Every figure measured on data the model never trained on"
+          loading={model.isLoading}
+          error={model.error}
+          flow
+          table={{
+            filename: 'model-checks',
+            rows: modelRows,
+            columns: [
+              { key: 'measure', header: 'Measure' },
+              { key: 'value', header: 'Value', align: 'right' },
+            ],
+          }}
+        >
+          {model.data?.available === false ? (
+            <p className="text-sm text-gray-400">No model is available: {model.data.reason}</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              {revenue && (
+                <section>
+                  <h4 className="mb-1 text-xs font-semibold text-white">Revenue forecast error</h4>
+                  <p className="mb-3 text-[11px] text-gray-500">
+                    Mean absolute percentage error on the last {revenue.holdoutMonths} months where lower is better
+                  </p>
+                  <RankedBars
+                    keepOrder
+                    rows={[
+                      { key: 'model', label: 'This model', value: revenue.mape, color: 'var(--color-chart-1)' },
+                      { key: 'seasonal', label: 'Same month last year', value: revenue.seasonalNaiveMape, color: 'var(--color-ink-muted)' },
+                      { key: 'naive', label: 'Repeat last month', value: revenue.naiveMape, color: 'var(--color-ink-muted)' },
+                    ].map((r) => ({ ...r, display: `${r.value.toFixed(1)}%` }))}
+                  />
+                  <p className="mt-3 text-[11px] text-gray-500">{revenue.model}</p>
+                </section>
+              )}
+              {churn && (
+                <section>
+                  <h4 className="mb-1 text-xs font-semibold text-white">Churn model</h4>
+                  <p className="mb-3 text-[11px] text-gray-500">
+                    Trained on customers as they stood on {churn.cutoff ? formatDate(churn.cutoff) : 'the cutoff'} and labeled
+                    by whether they ordered in the {churn.horizonDays} days after
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <StatCard title="ROC AUC" value={churn.rocAuc.toFixed(2)} subtitle="0.5 is a coin flip" />
+                    <StatCard title="Base rate" value={`${(churn.baseRate * 100).toFixed(0)}%`} subtitle="Went quiet for 90 days" />
+                    <StatCard title="Precision" value={`${(churn.precision * 100).toFixed(0)}%`} subtitle="Flagged who did go quiet" />
+                    <StatCard title="Recall" value={`${(churn.recall * 100).toFixed(0)}%`} subtitle="Went quiet and were flagged" />
+                  </div>
+                </section>
+              )}
+              {churn && (
+                <section>
+                  <h4 className="mb-1 text-xs font-semibold text-white">What drives churn risk</h4>
+                  <p className="mb-3 text-[11px] text-gray-500">How much of the model's fit each feature contributes</p>
+                  <RankedBars
+                    dense
+                    labelWidth="48%"
+                    rows={Object.entries(churn.topFeatures)
+                      .slice(0, 6)
+                      .map(([name, weight]) => ({
+                        key: name,
+                        label: featureLabel(name),
+                        value: weight,
+                        display: `${(weight * 100).toFixed(0)}%`,
+                      }))}
+                  />
+                </section>
+              )}
             </div>
-          </ChartCard>
-
-          <ChartCard
-            title="Revenue by Segment"
-            subtitle="Selected period"
-            loading={segmentsLoading}
-          >
-            <DonutChart
-              data={segmentForecast}
-              nameKey="segment"
-              valueKey="value"
-              formatValue="currency"
-            />
-          </ChartCard>
-        </div>
-
-        {/* Row 4: Churn Risk + Revenue at Risk - 40% */}
-        <div className="flex-[40] min-h-0 grid grid-cols-2 gap-2">
-          <ChartCard
-            title="Churn Risk Predictions"
-            subtitle="At-risk customers"
-            loading={churnLoading}
-          >
-            <DataTable
-              data={churnData}
-              keyExtractor={(row) => row.id}
-              columns={[
-                { key: 'company', header: 'Company', sortable: true },
-                { key: 'segment', header: 'Segment', sortable: true },
-                {
-                  key: 'ltv',
-                  header: 'LTV',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => formatCurrency(value as number),
-                },
-                {
-                  key: 'riskScore',
-                  header: 'Risk',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => {
-                    const score = value as number;
-                    const color = score >= 0.7 ? 'text-danger' : score >= 0.5 ? 'text-warning' : 'text-success';
-                    return (
-                      <span className={`font-medium ${color}`}>
-                        {(score * 100).toFixed(0)}%
-                      </span>
-                    );
-                  },
-                },
-                {
-                  key: 'recommendation',
-                  header: 'Action',
-                  render: (value) => (
-                    <span className="px-1.5 py-0.5 text-xs rounded-full bg-primary-500/20 text-primary-400">
-                      {value as string}
-                    </span>
-                  ),
-                },
-              ]}
-              compact
-            />
-          </ChartCard>
-
-          <ChartCard title="Revenue at Risk" subtitle="By risk category" loading={riskLoading}>
-            <div className="h-full flex flex-col justify-between gap-1.5">
-              <div className="flex-1 min-h-0 flex items-center justify-between px-3 bg-danger/10 rounded-lg border border-danger/20">
-                <div>
-                  <div className="text-sm font-medium text-danger">High Risk</div>
-                  <div className="text-xs text-gray-400">{revenueAtRisk?.highRisk.customers ?? '—'} customers · {revenueAtRisk?.highRisk.threshold || '65%+ risk'}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-white">{revenueAtRisk ? formatCurrency(revenueAtRisk.highRisk.value) : '—'}</div>
-                </div>
-              </div>
-              <div className="flex-1 min-h-0 flex items-center justify-between px-3 bg-warning/10 rounded-lg border border-warning/20">
-                <div>
-                  <div className="text-sm font-medium text-warning">Medium Risk</div>
-                  <div className="text-xs text-gray-400">{revenueAtRisk?.mediumRisk.customers ?? '—'} customers · {revenueAtRisk?.mediumRisk.threshold || '50-65% risk'}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-white">{revenueAtRisk ? formatCurrency(revenueAtRisk.mediumRisk.value) : '—'}</div>
-                </div>
-              </div>
-              <div className="flex-1 min-h-0 flex items-center justify-between px-3 bg-success/10 rounded-lg border border-success/20">
-                <div>
-                  <div className="text-sm font-medium text-success">Low Risk</div>
-                  <div className="text-xs text-gray-400">{revenueAtRisk?.lowRisk.customers ?? '—'} customers · {revenueAtRisk?.lowRisk.threshold || '<50% risk'}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-white">{revenueAtRisk ? formatCurrency(revenueAtRisk.lowRisk.value) : '—'}</div>
-                </div>
-              </div>
-              <div className="flex-1 min-h-0 flex items-center justify-between px-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                <div className="text-sm font-medium text-gray-300">Total Revenue at Risk</div>
-                <div className="text-xl font-bold text-white">{revenueAtRisk ? formatCurrency(revenueAtRisk.total) : '—'}</div>
-              </div>
-            </div>
-          </ChartCard>
-        </div>
+          )}
+        </ChartCard>
       </div>
-    </div>
+    </>
   );
 }

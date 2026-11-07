@@ -3,14 +3,15 @@ import {
   LayoutDashboard,
   DollarSign,
   Users,
-  Settings2,
+  Workflow,
   TrendingUp,
   ChevronLeft,
   ChevronRight,
+  Github,
 } from 'lucide-react';
-import { useState } from 'react';
 import clsx from 'clsx';
 import { IS_STATIC, getManifest } from '../../services/staticData';
+import { formatDate } from '../../utils/formatters';
 
 interface NavItem {
   name: string;
@@ -19,56 +20,88 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Executive', href: '/', icon: LayoutDashboard },
   { name: 'Revenue', href: '/revenue', icon: DollarSign },
   { name: 'Customers', href: '/customers', icon: Users },
-  { name: 'Operations', href: '/operations', icon: Settings2 },
+  { name: 'Operations', href: '/operations', icon: Workflow },
   { name: 'Forecasting', href: '/forecasting', icon: TrendingUp },
 ];
 
-export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+const SOURCE_URL = 'https://github.com/ryansansbury/analytics_dashboard';
 
+function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <span className="flex items-center gap-2">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 text-white" aria-hidden="true">
+        <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor">
+          <rect x="2" y="8" width="2.5" height="6" rx="1" />
+          <rect x="6.75" y="5" width="2.5" height="9" rx="1" />
+          <rect x="11.5" y="2" width="2.5" height="12" rx="1" />
+        </svg>
+      </span>
+      {!compact && <span className="text-base font-semibold text-white">Analytics</span>}
+    </span>
+  );
+}
+
+/**
+ * The data note. The demo's data is synthetic and frozen at the date it was
+ * generated, and its date presets resolve against that date. Saying both is
+ * the honest thing: without it the dashboard silently claims to be a real
+ * business, current to today.
+ */
+function DataNote() {
+  const manifest = IS_STATIC ? getManifest() : null;
+  return (
+    <p className="text-[11px] leading-relaxed text-gray-500">
+      Synthetic data
+      {manifest && <> &middot; as of {formatDate(manifest.snapshotDate)}</>}
+    </p>
+  );
+}
+
+export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   return (
     <aside
       className={clsx(
-        'fixed left-0 top-0 z-40 h-screen bg-gray-900 border-r border-gray-800 transition-all duration-300',
-        collapsed ? 'w-16' : 'w-64'
+        'fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-gray-800 bg-gray-900 transition-all duration-300 lg:flex',
+        collapsed ? 'w-16' : 'w-64',
       )}
     >
-      {/* Logo - matches main header height h-12 */}
-      <div className="flex items-center justify-between px-4 h-12 border-b border-gray-800">
+      <div className="flex h-14 items-center justify-between border-b border-gray-800 px-3">
+        <Brand compact={collapsed} />
         {!collapsed && (
-          <span className="text-lg font-bold text-white">Analytics</span>
-        )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className={clsx(
-            'p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors',
-            collapsed && 'mx-auto'
-          )}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
+          <button
+            onClick={onToggle}
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
+            aria-label="Collapse sidebar"
+          >
             <ChevronLeft className="h-4 w-4" />
-          )}
-        </button>
+          </button>
+        )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex flex-col gap-0.5 p-2">
+      <nav className="flex flex-col gap-0.5 p-2" aria-label="Pages">
+        {collapsed && (
+          <button
+            onClick={onToggle}
+            className="mb-1 flex justify-center rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
+            aria-label="Expand sidebar"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
         {navigation.map((item) => (
           <NavLink
             key={item.name}
             to={item.href}
+            end={item.href === '/'}
+            title={collapsed ? item.name : undefined}
             className={({ isActive }) =>
               clsx(
-                'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200',
-                isActive
-                  ? 'bg-primary-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
+                collapsed && 'justify-center',
+                isActive ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white',
               )
             }
           >
@@ -78,24 +111,48 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer */}
       {!collapsed && (
-        <div className="absolute bottom-0 left-0 right-0 px-3 py-2 border-t border-gray-800">
-          <div className="text-xs text-gray-500">
-            <p>Enterprise Analytics v1.0.0</p>
-            {/*
-              The demo's data is frozen at the date it was generated, and its
-              date presets resolve against that date. Saying so is the honest
-              thing: without it the dashboard silently claims to be current.
-            */}
-            {IS_STATIC && getManifest() && (
-              <p className="mt-1 text-gray-600">
-                Static demo &middot; data as of {getManifest()!.snapshotDate}
-              </p>
-            )}
-          </div>
+        <div className="mt-auto space-y-2 border-t border-gray-800 px-4 py-3">
+          <DataNote />
+          <a
+            href={SOURCE_URL}
+            className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white"
+          >
+            <Github className="h-3.5 w-3.5" />
+            Source on GitHub
+          </a>
         </div>
       )}
     </aside>
+  );
+}
+
+/** The page links for narrow screens, where the sidebar would take half the width. */
+export function MobileNav() {
+  return (
+    <div className="border-b border-gray-800 bg-gray-900 lg:hidden">
+      <div className="flex items-center justify-between px-4 pt-3">
+        <Brand />
+        <DataNote />
+      </div>
+      <nav className="flex gap-1 overflow-x-auto px-3 py-2" aria-label="Pages">
+        {navigation.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.href}
+            end={item.href === '/'}
+            className={({ isActive }) =>
+              clsx(
+                'flex flex-shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium',
+                isActive ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white',
+              )
+            }
+          >
+            <item.icon className="h-3.5 w-3.5" />
+            {item.name}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
   );
 }

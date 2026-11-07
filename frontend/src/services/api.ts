@@ -1,10 +1,7 @@
 /**
  * API Service Layer
  *
- * Centralized API client for all backend communication. This module provides:
- * - Type-safe API functions organized by domain (dashboard, revenue, customers, etc.)
- * - Automatic error handling and JSON parsing
- * - Query string building for filter parameters
+ * One function per endpoint the pages call, grouped by domain.
  *
  * API Base URL:
  * - Development: Uses VITE_API_URL env var or defaults to '/api'
@@ -13,29 +10,44 @@
  *   network. See services/staticData.ts. Every function below is unchanged in
  *   that mode; only the transport differs.
  *
- * Usage Example:
- *   const data = await revenueApi.getTrends({ startDate: '2024-01-01', endDate: '2024-12-31' });
+ * The query string is the static demo's cache key, so parameter order matters
+ * and must match `endpoints_for` in backend/scripts/snapshot.py. Several views
+ * don't depend on the window's start and send only `end_date`, and a few send
+ * nothing, so every date preset shares one snapshot file for them.
  *
  * Error Handling:
  *   All functions throw on non-2xx responses with the error message from the server.
  */
 
 import type {
-  DashboardSummary,
-  RevenueTrend,
   CategoryData,
   ChannelData,
-  RegionData,
-  Product,
-  Customer,
+  Cohort,
+  CustomerOverview,
   CustomerSegment,
-  CohortData,
-  SalesRep,
-  PipelineStage,
-  PipelineOpportunity,
-  ForecastDataPoint,
-  ChurnRiskCustomer,
+  DashboardSummary,
   DateRange,
+  ForecastKpis,
+  ForecastPoint,
+  Granularity,
+  LifetimeValueBand,
+  ModelPerformance,
+  OrderSizeBand,
+  PipelineFlow,
+  PipelineKpis,
+  PipelineOutlook,
+  PipelineStage,
+  Product,
+  RegionTrends,
+  RevenueAtRisk,
+  RevenueCalendar,
+  RevenueComparison,
+  RiskValue,
+  SalesRep,
+  ScoredCustomer,
+  SeasonalityPoint,
+  SplitSeries,
+  StageDuration,
 } from '../types';
 import { IS_STATIC, fetchStatic } from './staticData';
 
@@ -53,11 +65,6 @@ const API_BASE = IS_STATIC ? '/api' : import.meta.env.VITE_API_URL || '/api';
  * The single point where the static demo diverges from the live app. Routing
  * here rather than per-function means the two modes cannot drift: any endpoint
  * added below is snapshotted by the same rule as every other.
- *
- * @param endpoint - API endpoint path (e.g., '/dashboard/summary')
- * @param options - Standard fetch options (method, headers, body, etc.)
- * @returns Parsed JSON response typed as T
- * @throws Error with message from server on non-2xx response
  */
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   if (IS_STATIC) {
@@ -88,309 +95,124 @@ function buildQueryString(params: Record<string, string | number | undefined>): 
   return filtered.length > 0 ? `?${filtered.join('&')}` : '';
 }
 
-// Dashboard API
+/** start_date then end_date, the order every windowed endpoint uses. */
+function windowed(dateRange: DateRange, extra: Record<string, string | number | undefined> = {}) {
+  return buildQueryString({ start_date: dateRange.startDate, end_date: dateRange.endDate, ...extra });
+}
+
+/** Only the window's end, for views that always look back a fixed span from it. */
+function ending(dateRange: DateRange) {
+  return buildQueryString({ end_date: dateRange.endDate });
+}
+
 export const dashboardApi = {
   getSummary: (dateRange: DateRange) =>
-    fetchApi<DashboardSummary>(
-      `/dashboard/summary${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
-
-  getKPIs: (dateRange: DateRange) =>
-    fetchApi<DashboardSummary['kpis']>(
-      `/dashboard/kpis${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
+    fetchApi<DashboardSummary>(`/dashboard/summary${windowed(dateRange)}`),
 };
 
-// Revenue API
 export const revenueApi = {
-  getTrends: (dateRange: DateRange, granularity: 'day' | 'week' | 'month' = 'day') =>
-    fetchApi<RevenueTrend[]>(
-      `/revenue/trends${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-        granularity,
-      })}`
-    ),
+  getComparison: (dateRange: DateRange, granularity: Granularity) =>
+    fetchApi<RevenueComparison>(`/revenue/comparison${windowed(dateRange, { granularity })}`),
+
+  getCategoryTrends: (dateRange: DateRange, granularity: Granularity) =>
+    fetchApi<SplitSeries>(`/revenue/category-trends${windowed(dateRange, { granularity })}`),
+
+  getRegionTrends: (dateRange: DateRange, granularity: Granularity) =>
+    fetchApi<RegionTrends>(`/revenue/region-trends${windowed(dateRange, { granularity })}`),
+
+  getCalendar: (dateRange: DateRange) =>
+    fetchApi<RevenueCalendar>(`/revenue/calendar${ending(dateRange)}`),
 
   getByCategory: (dateRange: DateRange) =>
-    fetchApi<CategoryData[]>(
-      `/revenue/by-category${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
-
-  getByRegion: (dateRange: DateRange) =>
-    fetchApi<RegionData[]>(
-      `/revenue/by-region${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
+    fetchApi<CategoryData[]>(`/revenue/by-category${windowed(dateRange)}`),
 
   getByChannel: (dateRange: DateRange) =>
-    fetchApi<ChannelData[]>(
-      `/revenue/by-channel${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
+    fetchApi<ChannelData[]>(`/revenue/by-channel${windowed(dateRange)}`),
+
+  getOrderSizes: (dateRange: DateRange) =>
+    fetchApi<OrderSizeBand[]>(`/revenue/order-sizes${windowed(dateRange)}`),
 
   getTopProducts: (dateRange: DateRange, limit = 10) =>
-    fetchApi<Product[]>(
-      `/revenue/top-products${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-        limit,
-      })}`
-    ),
+    fetchApi<Product[]>(`/revenue/top-products${windowed(dateRange, { limit })}`),
 };
 
-// Customer API
 export const customerApi = {
   getOverview: (dateRange: DateRange) =>
-    fetchApi<{
-      total: number;
-      totalChange: number;
-      new: number;
-      newChange: number;
-      churned: number;
-      churnedChange: number;
-      atRisk: number;
-      atRiskChange: number;
-    }>(
-      `/customers/overview${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
+    fetchApi<CustomerOverview>(`/customers/overview${windowed(dateRange)}`),
 
   getSegments: (dateRange: DateRange) =>
-    fetchApi<CustomerSegment[]>(
-      `/customers/segments${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
+    fetchApi<CustomerSegment[]>(`/customers/segments${windowed(dateRange)}`),
 
   getCohorts: (dateRange: DateRange) =>
-    fetchApi<CohortData[]>(
-      `/customers/cohorts${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
+    fetchApi<Cohort[]>(`/customers/cohorts${ending(dateRange)}`),
 
-  getLifetimeValue: (dateRange?: DateRange) =>
-    fetchApi<{ range: string; count: number; percentage: number }[]>(
-      `/customers/lifetime-value${buildQueryString({
-        start_date: dateRange?.startDate,
-        end_date: dateRange?.endDate,
-      })}`
-    ),
+  /** Every customer to date, so it takes no window. */
+  getLifetimeValue: () =>
+    fetchApi<LifetimeValueBand[]>('/customers/lifetime-value'),
 
   getAcquisition: (dateRange: DateRange) =>
-    fetchApi<{ date: string; channel: string; count: number }[]>(
-      `/customers/acquisition${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
+    fetchApi<SplitSeries>(`/customers/acquisition${windowed(dateRange)}`),
 
-  getAtRisk: (limit = 10, dateRange?: DateRange) =>
-    fetchApi<Customer[]>(`/customers/at-risk${buildQueryString({
+  getAtRisk: (dateRange: DateRange, limit = 10) =>
+    fetchApi<ScoredCustomer[]>(`/customers/at-risk${buildQueryString({
       limit,
-      start_date: dateRange?.startDate,
-      end_date: dateRange?.endDate,
+      start_date: dateRange.startDate,
+      end_date: dateRange.endDate,
     })}`),
+
+  /** Scored as of the latest data, so it takes no window. */
+  getRiskValue: () =>
+    fetchApi<RiskValue>('/customers/risk-value'),
 };
 
-// Operations API
 export const operationsApi = {
   getPipeline: (dateRange: DateRange) =>
-    fetchApi<PipelineStage[]>(
-      `/operations/pipeline${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
+    fetchApi<PipelineStage[]>(`/operations/pipeline${windowed(dateRange)}`),
 
   getPipelineKpis: (dateRange: DateRange) =>
-    fetchApi<{
-      pipelineValue: number;
-      pipelineChange: number;
-      avgCycleTime: number;
-      cycleTimeChange: number;
-      winRate: number;
-      winRateChange: number;
-      avgDealSize: number;
-      dealSizeChange: number;
-    }>(
-      `/operations/pipeline-kpis${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
+    fetchApi<PipelineKpis>(`/operations/pipeline-kpis${windowed(dateRange)}`),
+
+  getPipelineFlow: (dateRange: DateRange) =>
+    fetchApi<PipelineFlow>(`/operations/pipeline-flow${ending(dateRange)}`),
 
   getSalesPerformance: (dateRange: DateRange) =>
-    fetchApi<SalesRep[]>(
-      `/operations/sales-performance${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
-
-  getConversionRates: () =>
-    fetchApi<{ fromStage: string; toStage: string; rate: number }[]>(
-      '/operations/conversion-rates'
-    ),
+    fetchApi<SalesRep[]>(`/operations/sales-performance${windowed(dateRange)}`),
 
   getCycleTime: (dateRange: DateRange) =>
-    fetchApi<{ stage: string; avgDays: number }[]>(
-      `/operations/cycle-time${buildQueryString({
-        start_date: dateRange.startDate,
-      })}`
-    ),
+    fetchApi<StageDuration[]>(`/operations/cycle-time${ending(dateRange)}`),
 
-  getDealSizeDistribution: (dateRange: DateRange) =>
-    fetchApi<{ bucket: string; count: number; value: number }[]>(
-      `/operations/deal-size-distribution${buildQueryString({
-        start_date: dateRange.startDate,
-        end_date: dateRange.endDate,
-      })}`
-    ),
-
-  getOpportunities: (stage?: string, limit = 20) =>
-    fetchApi<PipelineOpportunity[]>(
-      `/operations/opportunities${buildQueryString({ stage, limit })}`
-    ),
+  getOutlook: (dateRange: DateRange) =>
+    fetchApi<PipelineOutlook[]>(`/forecasting/pipeline${windowed(dateRange)}`),
 };
 
-// Forecasting API
 export const forecastingApi = {
-  getRevenueForecast: (periods = 6, dateRange?: DateRange) =>
-    fetchApi<ForecastDataPoint[]>(
-      `/forecasting/revenue${buildQueryString({
-        periods,
-        start_date: dateRange?.startDate,
-        end_date: dateRange?.endDate,
-      })}`
-    ),
+  getRevenueForecast: (dateRange: DateRange, periods = 6) =>
+    fetchApi<ForecastPoint[]>(`/forecasting/revenue${buildQueryString({
+      periods,
+      start_date: dateRange.startDate,
+      end_date: dateRange.endDate,
+    })}`),
 
-  getPipelineForecast: (dateRange?: DateRange) =>
-    fetchApi<{ month: string; weighted: number; best: number; worst: number }[]>(
-      `/forecasting/pipeline${buildQueryString({
-        start_date: dateRange?.startDate,
-        end_date: dateRange?.endDate,
-      })}`
-    ),
+  getKpis: (dateRange: DateRange) =>
+    fetchApi<ForecastKpis>(`/forecasting/kpis${windowed(dateRange)}`),
 
-  getChurnRisk: (limit = 10, dateRange?: DateRange) =>
-    fetchApi<ChurnRiskCustomer[]>(
-      `/forecasting/churn-risk${buildQueryString({
-        limit,
-        start_date: dateRange?.startDate,
-        end_date: dateRange?.endDate,
-      })}`
-    ),
-
-  getSeasonality: (dateRange?: DateRange) =>
-    fetchApi<{ month: string; index: number; trend: number }[]>(
-      `/forecasting/seasonality${buildQueryString({
-        start_date: dateRange?.startDate,
-        end_date: dateRange?.endDate,
-      })}`
-    ),
-
-  getKpis: (dateRange?: DateRange) =>
-    fetchApi<{
-      predictedRevenue: number;
-      predictedChange: number;
-      atRiskCount: number;
-      atRiskChange: number;
-      modelAccuracy: number;
-      accuracyChange: number;
-      forecastPeriod: number;
-    }>(
-      `/forecasting/kpis${buildQueryString({
-        start_date: dateRange?.startDate,
-        end_date: dateRange?.endDate,
-      })}`
-    ),
+  getSeasonality: (dateRange: DateRange) =>
+    fetchApi<SeasonalityPoint[]>(`/forecasting/seasonality${windowed(dateRange)}`),
 
   /**
    * Measured metrics for both trained models.
    *
-   * The nested `revenue` and `churn` objects are the real shape. This type used
-   * to declare a flat one with a `confidence` field the endpoint has never
-   * returned, so the UI rendered `undefined%` on the page and TypeScript had no
-   * way to catch it. The flat keys are kept because the endpoint still returns
-   * them as a summary, but the nested objects are what to read.
+   * The nested `revenue` and `churn` objects are the real shape. A flat
+   * `confidence` field this type once declared was never returned, so the UI
+   * rendered `undefined%` and TypeScript had no way to catch it.
    */
-  getModelPerformance: (dateRange?: DateRange) =>
-    fetchApi<{
-      available: boolean;
-      accuracy: number;
-      mape: number;
-      r2Score: number;
-      rmse: number;
-      dataPoints: string;
-      revenue?: {
-        model: string;
-        validation: string;
-        mape: number;
-        naiveMape: number;
-        seasonalNaiveMape: number;
-        improvementOverNaive: number;
-        rmse: number;
-        mae: number;
-        r2Score: number;
-        trainMonths: number;
-        holdoutMonths: number;
-      };
-      churn?: {
-        model: string;
-        validation: string;
-        rocAuc: number;
-        accuracy: number;
-        precision: number;
-        recall: number;
-        f1: number;
-        averagePrecision: number;
-        brierScore: number;
-        baseRate: number;
-        trainRows: number;
-        holdoutRows: number;
-        topFeatures: Record<string, number>;
-      };
-    }>(
-      `/forecasting/model-performance${buildQueryString({
-        start_date: dateRange?.startDate,
-        end_date: dateRange?.endDate,
-      })}`
-    ),
+  getModelPerformance: (dateRange: DateRange) =>
+    fetchApi<ModelPerformance>(`/forecasting/model-performance${windowed(dateRange)}`),
 
-  getRevenueAtRisk: (dateRange?: DateRange) =>
-    fetchApi<{
-      highRisk: { value: number; customers: number; label: string; threshold: string };
-      mediumRisk: { value: number; customers: number; label: string; threshold: string };
-      lowRisk: { value: number; customers: number; label: string; threshold: string };
-      total: number;
-    }>(
-      `/forecasting/revenue-at-risk${buildQueryString({
-        start_date: dateRange?.startDate,
-        end_date: dateRange?.endDate,
-      })}`
-    ),
+  getRevenueAtRisk: (dateRange: DateRange) =>
+    fetchApi<RevenueAtRisk>(`/forecasting/revenue-at-risk${windowed(dateRange)}`),
 };
 
-// Health check
 export const healthApi = {
   check: () => fetchApi<{ status: string; timestamp: string }>('/health'),
 };

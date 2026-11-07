@@ -6,10 +6,31 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
-import { currencyAxisFormatter, formatCurrency, formatDateShort } from '../../utils/formatters';
+import {
+  currencyAxisFormatter,
+  formatCurrency,
+  formatDateShort,
+  numberAxisFormatter,
+  percentAxisFormatter,
+} from '../../utils/formatters';
 import { CHART_CHROME, getChartColor } from '../../utils/formatters';
+import { AXIS, Legend, TooltipBox } from './chrome';
+import { REDUCED_MOTION } from '../../utils/motion';
+
+type ValueFormat = 'currency' | 'number' | 'percent';
+
+const AXIS_FORMAT: Record<ValueFormat, (v: number) => string> = {
+  currency: currencyAxisFormatter,
+  number: numberAxisFormatter,
+  percent: percentAxisFormatter,
+};
+
+const VALUE_FORMAT: Record<ValueFormat, (v: number) => string> = {
+  currency: (v) => formatCurrency(v),
+  number: (v) => v.toLocaleString(),
+  percent: (v) => `${v.toFixed(1)}%`,
+};
 
 interface AreaChartProps<T> {
   data: T[];
@@ -27,7 +48,9 @@ interface AreaChartProps<T> {
    */
   colors?: string[];
   showLegend?: boolean;
-  formatY?: 'currency' | 'number' | 'percent';
+  formatY?: ValueFormat;
+  /** Tick text for the x axis. Defaults to "Mar 2" from an ISO date. */
+  formatX?: (value: string) => string;
   stacked?: boolean;
   gradient?: boolean;
   dashedKeys?: (keyof T)[];
@@ -39,6 +62,12 @@ interface AreaChartProps<T> {
    * values carry no uncertainty to draw.
    */
   band?: { lower: keyof T; upper: keyof T; label?: string };
+  /** Hide the y axis, for small multiples that share a scale shown elsewhere. */
+  hideYAxis?: boolean;
+  /** Fix the y domain, so several charts share one scale. */
+  yDomain?: [number, number];
+  /** Tooltip total row for stacked series. */
+  showTotal?: boolean;
 }
 
 export function AreaChart<T extends Record<string, unknown>>({
@@ -51,10 +80,14 @@ export function AreaChart<T extends Record<string, unknown>>({
   colors,
   showLegend,
   formatY = 'currency',
+  formatX = formatDateShort,
   stacked = false,
   gradient = true,
   dashedKeys = [],
   band,
+  hideYAxis = false,
+  yDomain,
+  showTotal = false,
 }: AreaChartProps<T>) {
   /** Override wins for the slots it covers; the palette fills the rest. */
   const seriesColor = (i: number) => colors?.[i] ?? getChartColor(i);
@@ -66,87 +99,70 @@ export function AreaChart<T extends Record<string, unknown>>({
    * explicit prop still wins either way.
    */
   const legendVisible = showLegend ?? yKeys.length >= 2;
+  const formatValue = VALUE_FORMAT[formatY];
 
-  const formatYAxis = formatY === 'currency' ? currencyAxisFormatter : (v: number) => v.toLocaleString();
-  const formatTooltip = formatY === 'currency' ? formatCurrency : (v: number) => v.toLocaleString();
-
-  // Calculate interval for X-axis labels to prevent overlap
-  // Show fewer labels when there are many data points
+  // Fewer tick labels when there are many points, so they never collide.
   const xAxisInterval = data.length > 20 ? Math.ceil(data.length / 10) - 1 : 0;
+  const gradientId = (key: keyof T) => `area-${String(key).replace(/[^a-zA-Z0-9]/g, '')}`;
 
-  return (
+  const chart = (
     <ResponsiveContainer width="100%" height={height}>
       {/* Right margin so the final x-axis tick is not clipped by the plot edge.
         * With zero margin the last label rendered as "Ja" instead of "Jan 1". */}
-      <RechartsAreaChart data={data} margin={{ top: 0, right: 14, left: 0, bottom: 0 }}>
+      <RechartsAreaChart data={data} margin={{ top: 6, right: 14, left: 0, bottom: 0 }}>
         <defs>
           {yKeys.map((key, index) => (
-            <linearGradient
-              key={String(key)}
-              id={`gradient-${String(key)}`}
-              x1="0"
-              y1="0"
-              x2="0"
-              y2="1"
-            >
-              <stop
-                offset="5%"
-                stopColor={seriesColor(index)}
-                stopOpacity={0.3}
-              />
-              <stop
-                offset="95%"
-                stopColor={seriesColor(index)}
-                stopOpacity={0}
-              />
+            <linearGradient key={String(key)} id={gradientId(key)} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={seriesColor(index)} stopOpacity={stacked ? 0.85 : 0.3} />
+              <stop offset="95%" stopColor={seriesColor(index)} stopOpacity={stacked ? 0.65 : 0} />
             </linearGradient>
           ))}
         </defs>
 
-        {showGrid && (
-          <CartesianGrid stroke={CHART_CHROME.grid} strokeWidth={1} vertical={false} />
-        )}
+        {showGrid && <CartesianGrid stroke={CHART_CHROME.grid} strokeWidth={1} vertical={false} />}
 
         <XAxis
           dataKey={String(xKey)}
-          stroke={CHART_CHROME.mutedInk}
+          {...AXIS}
           fontSize={10}
-          tickLine={false}
-          axisLine={false}
-          tickFormatter={(value) => formatDateShort(value)}
+          tickFormatter={(value) => formatX(String(value))}
           interval={xAxisInterval}
+          minTickGap={8}
         />
 
         <YAxis
-          stroke={CHART_CHROME.mutedInk}
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-          tickFormatter={formatYAxis}
-          width={60}
+          {...AXIS}
+          hide={hideYAxis}
+          tickFormatter={AXIS_FORMAT[formatY]}
+          width={56}
+          domain={yDomain ?? [0, 'auto']}
         />
 
         <Tooltip
-          contentStyle={{
-            backgroundColor: '#1F2937',
-            border: '1px solid #374151',
-            borderRadius: '8px',
-            fontSize: '12px',
+          cursor={{ stroke: CHART_CHROME.axis, strokeWidth: 1 }}
+          content={({ active, payload, label }) => {
+            if (!active || !payload?.length) return null;
+            const rows = payload
+              .filter((p) => p.value != null && !Array.isArray(p.value))
+              .map((p) => ({
+                name: labels[String(p.dataKey)] ?? String(p.name),
+                value: formatValue(Number(p.value)),
+                color: String(p.color ?? ''),
+                dashed: dashedKeys.includes(p.dataKey as keyof T),
+              }))
+              .reverse();
+            const total = rows.length > 1 && showTotal
+              ? formatValue(payload.reduce((s, p) => s + (Array.isArray(p.value) ? 0 : Number(p.value) || 0), 0))
+              : null;
+            return (
+              <TooltipBox
+                title={formatX(String(label))}
+                rows={rows}
+                footer={total ? `Total ${total}` : undefined}
+              />
+            );
           }}
-          labelStyle={{ color: '#9CA3AF' }}
-          formatter={(value, name) => [
-            formatTooltip(Number(value) || 0),
-            labels[String(name)] || String(name),
-          ]}
-          labelFormatter={(label) => formatDateShort(String(label))}
         />
-
-        {legendVisible && (
-          <Legend
-            wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-            formatter={(value) => labels[value] || value}
-          />
-        )}
 
         {/* Uncertainty band, drawn first so it sits behind the lines.
           *
@@ -179,18 +195,19 @@ export function AreaChart<T extends Record<string, unknown>>({
             key={String(key)}
             type="monotone"
             dataKey={String(key)}
+            name={labels[String(key)] ?? String(key)}
             stackId={stacked ? 'stack' : undefined}
-            stroke={seriesColor(index)}
-            strokeWidth={2}
+            stroke={stacked ? 'var(--color-surface)' : seriesColor(index)}
+            strokeWidth={stacked ? 1 : 2}
             strokeDasharray={dashedKeys.includes(key) ? '5 5' : undefined}
+            activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--color-surface)' }}
             /*
              * A dashed series is a projection, so it draws as a line only.
              *
              * Filling it was actively misleading in two ways. A filled area
              * reads as measured volume, which a forecast is not. And where a
              * backtest overlaps the actuals, two translucent fills stack into a
-             * smear in which neither line can be read - which is exactly what
-             * happened on the forecasting page.
+             * smear in which neither line can be read.
              *
              * When a band is present nothing is filled. On a chart that runs
              * measured history into a forecast, filling the measured half
@@ -198,18 +215,46 @@ export function AreaChart<T extends Record<string, unknown>>({
              * moment the actuals stopped, which read as the data breaking
              * rather than as history ending. The band is the fill; a second one
              * competes with it.
+             *
+             * Stacked layers are filled solid with a hairline of the surface
+             * between them, which is the 2px gap a stacked chart needs so
+             * neighbouring layers never merge.
              */
             fill={
               dashedKeys.includes(key) || band
                 ? 'none'
                 : gradient
-                  ? `url(#gradient-${String(key)})`
+                  ? `url(#${gradientId(key)})`
                   : seriesColor(index)
             }
-            fillOpacity={dashedKeys.includes(key) || band ? 0 : gradient ? 1 : 0.1}
+            fillOpacity={dashedKeys.includes(key) || band ? 0 : gradient ? 1 : stacked ? 0.9 : 0.1}
+            isAnimationActive={!REDUCED_MOTION}
           />
         ))}
       </RechartsAreaChart>
     </ResponsiveContainer>
+  );
+
+  /*
+   * The legend is plain HTML above the plot, in the order the keys arrive,
+   * which is largest first. Recharts' own legend sorted entries
+   * alphabetically, drew each swatch in the series' stroke (the white hairline
+   * between stacked layers, so the swatches vanished), and ran off the edge
+   * of a narrow card.
+   */
+  if (!legendVisible) return chart;
+  return (
+    <div className="flex h-full flex-col gap-2">
+      <Legend
+        items={yKeys.map((key, i) => ({
+          key: String(key),
+          label: labels[String(key)] ?? String(key),
+          color: seriesColor(i),
+          dashed: dashedKeys.includes(key),
+          line: !stacked && !dashedKeys.includes(key),
+        }))}
+      />
+      <div className="min-h-0 flex-1">{chart}</div>
+    </div>
   );
 }

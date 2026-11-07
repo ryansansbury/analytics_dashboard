@@ -1,182 +1,224 @@
-import { Target, Clock, Trophy, TrendingUp } from 'lucide-react';
+import { Layers, Trophy, Coins, Timer } from 'lucide-react';
 import { Header } from '../components/layout/Header';
-import { KPICard } from '../components/cards/KPICard';
-import { ChartCard } from '../components/cards/ChartCard';
+import { KPICard, KPIGrid } from '../components/cards/KPICard';
+import { ChartCard, StatCard } from '../components/cards/ChartCard';
+import { AttainmentBars } from '../components/charts/AttainmentBars';
 import { BarChart } from '../components/charts/BarChart';
-import { FunnelChart } from '../components/charts/FunnelChart';
-import { DonutChart } from '../components/charts/PieChart';
-import { DataTable } from '../components/tables/DataTable';
-import { formatCurrency } from '../utils/formatters';
-import { usePipeline, useSalesPerformance, useCycleTime, usePipelineKpis, useDealSizeDistribution } from '../hooks/useApi';
+import { RankedBars } from '../components/charts/RankedBars';
+import { SankeyChart } from '../components/charts/SankeyChart';
+import { format, parseISO, subDays } from 'date-fns';
+import { daysInclusive, formatCurrency, formatDate, formatDateRange, getOrdinalColor } from '../utils/formatters';
+import {
+  useCycleTime,
+  usePipelineFlow,
+  usePipelineKpis,
+  usePipelineOutlook,
+  useSalesPerformance,
+} from '../hooks/useApi';
 import { useFilters } from '../hooks/useFilters';
 
 export function Operations() {
   const { filters } = useFilters();
+  const { startDate, endDate } = filters.dateRange;
+  const comparison = `vs prior ${daysInclusive(startDate, endDate)} days`;
 
-  // Fetch real data from API - all data varies by selected date range
-  const { data: pipelineData, isLoading: pipelineLoading } = usePipeline();
-  const { data: pipelineKpis, isLoading: kpisLoading } = usePipelineKpis();
-  const { data: salesReps, isLoading: salesLoading } = useSalesPerformance();
-  const { data: cycleTimeData } = useCycleTime();
-  const { data: dealSizeData, isLoading: dealSizeLoading } = useDealSizeDistribution();
+  const kpis = usePipelineKpis();
+  const flow = usePipelineFlow();
+  const stages = useCycleTime();
+  const reps = useSalesPerformance();
+  const outlook = usePipelineOutlook();
 
-  // Transform pipeline data for funnel
-  const funnelData = (pipelineData || []).map((item, index, arr) => ({
-    stage: item.stage,
-    value: item.value,
-    count: item.count,
-    conversionRate: index === 0 ? 100 : Math.round((item.count / arr[0].count) * 100),
-  }));
-
-  // Transform deal size data for histogram
-  const dealSizeDistribution = (dealSizeData || []).map(item => ({
-    bucket: item.bucket,
-    count: item.count,
-  }));
-
-  // Use cycle time from API
-  const cycleData = cycleTimeData || [
-    { stage: 'Lead to Qualified', avgDays: 8 },
-    { stage: 'Qualified to Proposal', avgDays: 12 },
-    { stage: 'Proposal to Negotiation', avgDays: 15 },
-    { stage: 'Negotiation to Close', avgDays: 7 },
-  ];
-
-  // Transform sales reps data (take top 20)
-  const salesRepsData = (salesReps || []).slice(0, 20).map(rep => ({
-    id: rep.id,
-    name: rep.name,
-    team: rep.team,
-    region: rep.region,
-    quota: rep.quota,
-    achieved: rep.achieved,
-    deals: rep.deals,
-    attainment: rep.attainment,
+  const k = kpis.data;
+  const totals = (outlook.data ?? []).reduce(
+    (t, m) => ({ worst: t.worst + m.worst, weighted: t.weighted + m.weighted, best: t.best + m.best }),
+    { worst: 0, weighted: 0, best: 0 },
+  );
+  const stageRows = (stages.data ?? []).filter((s) => s.avgDays != null);
+  const linkRows = (flow.data?.links ?? []).map((l) => ({
+    from: flow.data!.nodes[l.source].name,
+    to: flow.data!.nodes[l.target].name,
+    deals: l.value,
+    amount: l.amount,
   }));
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <Header
-        title="Operations"
-        subtitle={`${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
-      />
-
-      {/* Content area with fixed row heights */}
-      <div className="flex-1 p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
-        {/* Row 1: KPIs - fixed height */}
-        <div className="flex-shrink-0 grid grid-cols-4 gap-2">
+    <>
+      <Header title="Sales Operations" />
+      <div className="mx-auto max-w-[1680px] space-y-4 p-4 lg:p-6">
+        <KPIGrid>
           <KPICard
-            label="Pipeline Value"
-            value={pipelineKpis?.pipelineValue ?? null}
-            changePercent={pipelineKpis?.pipelineChange ?? null}
+            label="Open pipeline"
+            value={k?.pipelineValue ?? null}
+            changePercent={k?.pipelineChange}
+            comparison={`vs ${formatDate(format(subDays(parseISO(startDate), 1), 'yyyy-MM-dd'), 'MMM d, yyyy')}`}
+            caption={k ? `${k.openDeals} deals open at the end of the period` : undefined}
             format="currency"
-            icon={<TrendingUp className="h-4 w-4" />}
-            loading={kpisLoading}
+            icon={<Layers className="h-3.5 w-3.5" />}
+            loading={kpis.isLoading}
           />
           <KPICard
-            label="Avg Cycle Time"
-            value={pipelineKpis?.avgCycleTime ?? null}
-            changePercent={pipelineKpis?.cycleTimeChange ?? null}
-            format="number"
-            icon={<Clock className="h-4 w-4" />}
-            loading={kpisLoading}
-          />
-          <KPICard
-            label="Win Rate"
-            value={pipelineKpis?.winRate ?? null}
-            changePercent={pipelineKpis?.winRateChange ?? null}
+            label="Win rate"
+            value={k?.winRate ?? null}
+            changePercent={k?.winRateChange}
+            changeUnit="pts"
+            comparison={comparison}
+            caption={k ? `${k.dealsWon} won and ${k.dealsLost} lost in the period` : undefined}
             format="percent"
-            icon={<Trophy className="h-4 w-4" />}
-            loading={kpisLoading}
+            icon={<Trophy className="h-3.5 w-3.5" />}
+            loading={kpis.isLoading}
           />
           <KPICard
-            label="Avg Deal Size"
-            value={pipelineKpis?.avgDealSize ?? null}
-            changePercent={pipelineKpis?.dealSizeChange ?? null}
+            label="Average won deal"
+            value={k?.avgDealSize ?? null}
+            changePercent={k?.dealSizeChange}
+            comparison={comparison}
+            caption="Deals closed won in the period"
             format="currency"
-            icon={<Target className="h-4 w-4" />}
-            loading={kpisLoading}
+            icon={<Coins className="h-3.5 w-3.5" />}
+            loading={kpis.isLoading}
           />
-        </div>
+          <KPICard
+            label="Sales cycle"
+            value={k?.avgCycleTime ?? null}
+            changePercent={k?.cycleTimeChange}
+            invert
+            comparison={comparison}
+            caption="From first contact to the win"
+            format="days"
+            icon={<Timer className="h-3.5 w-3.5" />}
+            loading={kpis.isLoading}
+          />
+        </KPIGrid>
 
-        {/* Row 2: Pipeline, Conversion, Cycle Time - 45% */}
-        <div className="flex-[45] min-h-0 grid grid-cols-3 gap-2">
-          <ChartCard title="Sales Pipeline" subtitle="By stage" loading={pipelineLoading}>
-            <FunnelChart data={funnelData} />
-          </ChartCard>
-
-          <ChartCard title="Deal Size Distribution" subtitle="Transaction count by size" loading={dealSizeLoading}>
-            <DonutChart
-              data={dealSizeDistribution}
-              nameKey="bucket"
-              valueKey="count"
-              formatValue="number"
-            />
-          </ChartCard>
-
-          <ChartCard title="Deal Cycle Time" subtitle="Avg days per stage">
-            <BarChart
-              data={cycleData}
-              xKey="stage"
-              yKeys={['avgDays']}
-              formatY="number"
-              labels={{ avgDays: 'Days' }}
-              colors={['var(--color-chart-1)']}
-            />
-          </ChartCard>
-        </div>
-
-        {/* Row 3: Sales Team Performance - 55% */}
-        <div className="flex-[55] min-h-0">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <ChartCard
-            title="Sales Team Performance"
-            subtitle="Quota attainment"
-            loading={salesLoading}
+            className="h-[420px] lg:col-span-2"
+            title="Where new deals went"
+            subtitle={
+              flow.data
+                ? `${flow.data.created.toLocaleString()} deals created from ${formatDateRange(flow.data.startDate, flow.data.endDate)} and followed to today`
+                : undefined
+            }
+            loading={flow.isLoading}
+            error={flow.error}
+            table={{
+              filename: 'pipeline-flow',
+              rows: linkRows,
+              columns: [
+                { key: 'from', header: 'From' },
+                { key: 'to', header: 'To' },
+                { key: 'deals', header: 'Deals', align: 'right' },
+                { key: 'amount', header: 'Deal value', align: 'right', format: (r) => formatCurrency(r.amount) },
+              ],
+            }}
           >
-            <DataTable
-              data={salesRepsData}
-              keyExtractor={(row) => row.id}
-              columns={[
-                { key: 'name', header: 'Sales Rep', sortable: true },
-                { key: 'team', header: 'Team', sortable: true },
-                { key: 'region', header: 'Region', sortable: true },
-                {
-                  key: 'quota',
-                  header: 'Quota',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => formatCurrency(value as number, true),
-                },
-                {
-                  key: 'achieved',
-                  header: 'Achieved',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => formatCurrency(value as number, true),
-                },
-                {
-                  key: 'deals',
-                  header: 'Deals',
-                  sortable: true,
-                  align: 'right',
-                },
-                {
-                  key: 'attainment',
-                  header: '%',
-                  sortable: true,
-                  align: 'right',
-                  render: (value) => {
-                    const v = value as number;
-                    const color = v >= 100 ? 'text-success' : v >= 80 ? 'text-warning' : 'text-danger';
-                    return <span className={`font-medium ${color}`}>{v.toFixed(0)}%</span>;
-                  },
-                },
-              ]}
-              compact
+            {flow.data && (
+              <div className="h-full overflow-x-auto">
+                <div className="h-full min-w-[560px]">
+                  <SankeyChart flow={flow.data} />
+                </div>
+              </div>
+            )}
+          </ChartCard>
+
+          <ChartCard
+            className="h-[420px]"
+            title="Days in each stage"
+            subtitle="Average time before a deal moved on or closed in the last 12 months"
+            loading={stages.isLoading}
+            error={stages.error}
+            flow
+            table={{
+              filename: 'days-in-stage',
+              rows: stageRows,
+              columns: [
+                { key: 'stage', header: 'Stage' },
+                { key: 'avgDays', header: 'Average days', align: 'right' },
+                { key: 'count', header: 'Deals measured', align: 'right' },
+              ],
+            }}
+          >
+            <RankedBars
+              keepOrder
+              rows={stageRows.map((s, i) => ({
+                key: s.stage,
+                label: s.stage,
+                value: s.avgDays ?? 0,
+                display: `${(s.avgDays ?? 0).toFixed(1)} days`,
+                detail: `${s.count.toLocaleString()} deals left this stage`,
+                color: getOrdinalColor(i, stageRows.length),
+              }))}
             />
+            <p className="mt-4 text-[11px] leading-relaxed text-gray-500">
+              Measured from each deal's stage history. A deal that stalled counts for exactly the days it spent.
+            </p>
+          </ChartCard>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <ChartCard
+            className="h-[620px] lg:col-span-2"
+            title="Quota attainment"
+            subtitle="Each rep's bookings against their quota for these dates"
+            loading={reps.isLoading}
+            error={reps.error}
+            flow
+            table={{
+              filename: 'quota-attainment',
+              rows: reps.data ?? [],
+              columns: [
+                { key: 'name', header: 'Rep' },
+                { key: 'team', header: 'Team' },
+                { key: 'region', header: 'Region' },
+                { key: 'achieved', header: 'Booked', align: 'right', format: (r) => formatCurrency(r.achieved) },
+                { key: 'periodQuota', header: 'Quota for the period', align: 'right', format: (r) => formatCurrency(r.periodQuota) },
+                { key: 'attainment', header: 'Attainment', align: 'right', format: (r) => (r.attainment == null ? '—' : `${r.attainment}%`) },
+              ],
+            }}
+          >
+            <AttainmentBars reps={reps.data ?? []} />
+          </ChartCard>
+
+          <ChartCard
+            className="h-[620px]"
+            title="Pipeline outlook"
+            subtitle="Open deals by expected close month"
+            loading={outlook.isLoading}
+            error={outlook.error}
+            table={{
+              filename: 'pipeline-outlook',
+              rows: outlook.data ?? [],
+              columns: [
+                { key: 'month', header: 'Month' },
+                { key: 'worst', header: 'Commit', align: 'right', format: (r) => formatCurrency(r.worst) },
+                { key: 'weighted', header: 'Expected', align: 'right', format: (r) => formatCurrency(r.weighted) },
+                { key: 'best', header: 'Best case', align: 'right', format: (r) => formatCurrency(r.best) },
+              ],
+            }}
+          >
+            <div className="flex h-full flex-col gap-3">
+              <div className="grid grid-cols-3 gap-2">
+                <StatCard title="Commit" value={formatCurrency(totals.worst, true)} subtitle="Negotiation, weighted" />
+                <StatCard title="Expected" value={formatCurrency(totals.weighted, true)} subtitle="All open, weighted" />
+                <StatCard title="Best case" value={formatCurrency(totals.best, true)} subtitle="All open, full value" />
+              </div>
+              <div className="min-h-0 flex-1">
+                <BarChart
+                  data={(outlook.data ?? []).map((m) => ({ ...m }))}
+                  xKey="month"
+                  yKeys={['worst', 'weighted', 'best']}
+                  labels={{ worst: 'Commit', weighted: 'Expected', best: 'Best case' }}
+                  colors={['var(--color-ordinal-5)', 'var(--color-ordinal-3)', 'var(--color-ordinal-1)']}
+                />
+              </div>
+              <p className="text-[11px] leading-relaxed text-gray-500">
+                Each deal counts at its stage's probability of closing. Commit takes only the deals already in
+                negotiation, and best case counts every open deal at full value.
+              </p>
+            </div>
           </ChartCard>
         </div>
       </div>
-    </div>
+    </>
   );
 }

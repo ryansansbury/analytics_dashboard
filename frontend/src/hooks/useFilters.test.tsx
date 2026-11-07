@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
-import { format, subDays, subMonths, startOfYear } from 'date-fns'
+import { addDays, differenceInCalendarDays, format, subDays, subMonths, startOfYear } from 'date-fns'
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { FilterProvider, useFilters } from './useFilters'
@@ -44,12 +44,23 @@ describe('useFilters', () => {
   describe('presets', () => {
     const today = new Date()
     const cases: Array<[string, string]> = [
-      ['last7d', iso(subDays(today, 7))],
-      ['last30d', iso(subDays(today, 30))],
-      ['last90d', iso(subDays(today, 90))],
+      ['last7d', iso(subDays(today, 6))],
+      ['last30d', iso(subDays(today, 29))],
+      ['last90d', iso(subDays(today, 89))],
       ['ytd', iso(startOfYear(today))],
-      ['lastYear', iso(subMonths(today, 12))],
+      ['lastYear', iso(addDays(subMonths(today, 12), 1))],
     ]
+
+    it.each([
+      ['last7d', 7],
+      ['last30d', 30],
+      ['last90d', 90],
+    ])('%s holds exactly %i days, both ends counted', (preset, days) => {
+      const { result } = setup()
+      act(() => result.current.setDatePreset(preset as never))
+      const { startDate, endDate } = result.current.filters.dateRange
+      expect(differenceInCalendarDays(new Date(endDate), new Date(startDate)) + 1).toBe(days)
+    })
 
     it.each(cases)('%s computes the right start date', (preset, expected) => {
       const { result } = setup()

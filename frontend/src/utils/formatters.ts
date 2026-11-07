@@ -236,3 +236,51 @@ export function getTrendIcon(value: number): 'up' | 'down' | 'neutral' {
   if (value < 0) return 'down';
   return 'neutral';
 }
+
+// ============================================================================
+// Words for dates and signed changes
+// ============================================================================
+
+/** '2026-08-08' and '2026-11-06' as "Aug 8 to Nov 6, 2026", the year said once when shared. */
+export function formatDateRange(start: string, end: string): string {
+  const a = parseISO(start);
+  const b = parseISO(end);
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return `${start} to ${end}`;
+  if (a.getFullYear() === b.getFullYear()) {
+    return `${format(a, 'MMM d')} to ${format(b, 'MMM d, yyyy')}`;
+  }
+  return `${format(a, 'MMM d, yyyy')} to ${format(b, 'MMM d, yyyy')}`;
+}
+
+/** '2026-11-01' as "November 2026", or "Nov 2026" when short. */
+export function formatMonthYear(dateString: string, short = false): string {
+  return formatDate(dateString, short ? 'MMM yyyy' : 'MMMM yyyy');
+}
+
+/** A change with its sign, "+4.2%" or "-3.1%". Null when there's nothing to compare. */
+export function formatChange(
+  value: number | null | undefined,
+  unit: '%' | 'pts' = '%',
+  decimals = 1,
+): string | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+  const magnitude = Math.abs(value).toFixed(decimals);
+  return unit === 'pts' ? `${sign}${magnitude} pts` : `${sign}${magnitude}%`;
+}
+
+export function percentAxisFormatter(value: number): string {
+  return `${Math.round(value)}%`;
+}
+
+/** A share as a whole percent, with "<1%" for a real share too small to round up. Nine customers aren't 0%. */
+export function formatShare(percent: number): string {
+  if (percent > 0 && percent < 0.5) return '<1%';
+  return `${Math.round(percent)}%`;
+}
+
+/** Whole days from one ISO date to another, both ends counted. */
+export function daysInclusive(start: string, end: string): number {
+  const span = parseISO(end).getTime() - parseISO(start).getTime();
+  return Math.round(span / 86_400_000) + 1;
+}

@@ -6,6 +6,14 @@ interface ContainerSize {
   height: number;
 }
 
+/**
+ * The content box of an element, kept current as it resizes.
+ *
+ * Content box on both paths, padding excluded. The ResizeObserver reports the
+ * content box, and the first measurement used to come from
+ * getBoundingClientRect, which includes padding, so a chart drew one frame
+ * taller than its card and the bottom edge clipped until the observer caught up.
+ */
 export function useContainerSize<T extends HTMLElement>(): [RefObject<T | null>, ContainerSize] {
   const ref = useRef<T | null>(null);
   const [size, setSize] = useState<ContainerSize>({ width: 0, height: 0 });
@@ -23,9 +31,11 @@ export function useContainerSize<T extends HTMLElement>(): [RefObject<T | null>,
 
     resizeObserver.observe(element);
 
-    // Initial measurement
     const rect = element.getBoundingClientRect();
-    setSize({ width: rect.width, height: rect.height });
+    const style = getComputedStyle(element);
+    const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    const padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+    setSize({ width: Math.max(0, rect.width - padX), height: Math.max(0, rect.height - padY) });
 
     return () => {
       resizeObserver.disconnect();

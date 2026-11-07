@@ -50,11 +50,45 @@
   --color-axis: #d1d5db;
   --color-ink-muted: #6b7280;
 
+  /* Text and the surface charts sit on. Values and labels wear these, never a
+     series colour; a mark beside the text carries identity. */
+  --color-surface: #ffffff;
+  --color-ink: #111827;
+  --color-ink-secondary: #4b5563;
+
   /* Status. Reserved for good/warning/serious/critical, never a series. */
   --color-status-good: #0ca30c;
   --color-status-warning: #fab219;
   --color-status-serious: #ec835a;
   --color-status-critical: #d03b3b;
+
+  /* Sequential ramp for the heatmaps, low to high, one hue. Validated with the
+     ordinal checks against #ffffff: monotone lightness, a visible gap between
+     every pair of steps, and the lightest step at 2.11:1 so a low cell still
+     reads against the card. */
+  --color-heat-1: #86b6ef;
+  --color-heat-2: #5598e7;
+  --color-heat-3: #2a78d6;
+  --color-heat-4: #1c5cab;
+  --color-heat-5: #104281;
+  --color-heat-6: #0a2c58;
+  /* Ink for a value printed on each step: dark on the two light steps, white
+     from the third, where white clears 4.4:1. */
+  --color-heat-ink-1: #0b1f3a;
+  --color-heat-ink-2: #0b1f3a;
+  --color-heat-ink-3: #ffffff;
+  --color-heat-ink-4: #ffffff;
+  --color-heat-ink-5: #ffffff;
+  --color-heat-ink-6: #ffffff;
+  /* A day with no orders. Neutral, so it reads as absence rather than a low value. */
+  --color-heat-empty: #eceff3;
+
+  /* Text colour for good and bad changes. Overrides the theme's success and
+     danger, which measured 2.5:1 and 3.8:1 on white, too faint for the 12px
+     figures they colour. These clear 5:1. Unlayered, so they win over the
+     theme layer. */
+  --color-success: #0a7d0a;
+  --color-danger: #c22d2d;
 }
 
 @theme {
@@ -85,28 +119,30 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-/* Base styles */
+/* Base styles.
+ *
+ * The document scrolls. The layout used to pin every page to one viewport with
+ * overflow hidden throughout, which fit a desktop monitor and nothing else: on
+ * a laptop the bottom row of charts was crushed, and on a phone most of the
+ * page was unreachable. */
 html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  height: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
+  min-height: 100%;
+  overscroll-behavior-y: none;
   background-color: #F9FAFB;
   color: #111827;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #root {
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
 }
 
 /* ---------------------------------------------------------------------------
@@ -147,6 +183,30 @@ html.dark {
   --color-grid: #1f2937;
   --color-axis: #374151;
   --color-ink-muted: #9ca3af;
+
+  --color-surface: #111827;
+  --color-ink: #f9fafb;
+  --color-ink-secondary: #d1d5db;
+
+  /* The same hue re-stepped for the dark surface and validated against
+     #111827. Here low is dim and high is bright, so the darkest step is the
+     one nearest the surface, at 2.19:1. */
+  --color-heat-1: #184f95;
+  --color-heat-2: #256abf;
+  --color-heat-3: #3987e5;
+  --color-heat-4: #6da7ec;
+  --color-heat-5: #9ec5f4;
+  --color-heat-6: #cde2fb;
+  --color-heat-ink-1: #ffffff;
+  --color-heat-ink-2: #ffffff;
+  --color-heat-ink-3: #0b1220;
+  --color-heat-ink-4: #0b1220;
+  --color-heat-ink-5: #0b1220;
+  --color-heat-ink-6: #0b1220;
+  --color-heat-empty: #1c2433;
+
+  --color-success: #4ade80;
+  --color-danger: #f87171;
 }
 
 html.dark body {
@@ -221,12 +281,20 @@ html:not(.dark) .text-gray-300 {
   color: #374151 !important;
 }
 
+/* Secondary and caption text. These mapped to #6B7280 and #9CA3AF, and the
+   caption grey measured 2.5:1 on white, under the bar for the 11px notes it
+   sets. Both moved one step darker: 7.6:1 and 4.8:1. */
 html:not(.dark) .text-gray-400 {
-  color: #6B7280 !important;
+  color: #4B5563 !important;
 }
 
 html:not(.dark) .text-gray-500 {
-  color: #9CA3AF !important;
+  color: #6B7280 !important;
+}
+
+/* The same caption grey on the dark card measured 3.9:1. */
+html.dark .text-gray-500 {
+  color: #8b95a5;
 }
 
 html:not(.dark) .hover\:bg-gray-800:hover {
@@ -241,7 +309,6 @@ html:not(.dark) .hover\:text-white:hover {
   color: #111827 !important;
 }
 
-/* Light mode notification text */
 html:not(.dark) .text-gray-200 {
   color: #111827 !important;
 }
@@ -325,6 +392,15 @@ html:not(.dark) .text-gray-200 {
 .card-hover:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* Less motion when the visitor asks for it. The charts check the same
+   setting and draw without animating. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Number formatting for metrics */

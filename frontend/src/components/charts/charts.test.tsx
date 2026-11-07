@@ -2,8 +2,18 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { AreaChart } from './AreaChart'
 import { BarChart } from './BarChart'
-import { FunnelChart } from './FunnelChart'
-import { PieChart } from './PieChart'
+import { AttainmentBars } from './AttainmentBars'
+import { CalendarHeatmap } from './CalendarHeatmap'
+import { CohortHeatmap } from './CohortHeatmap'
+import { ComparisonChart } from './ComparisonChart'
+import { ForecastChart } from './ForecastChart'
+import { RankedBars } from './RankedBars'
+import { RiskScatter } from './RiskScatter'
+import { SankeyChart } from './SankeyChart'
+import { SeasonalityChart } from './SeasonalityChart'
+import { SmallMultiples } from './SmallMultiples'
+import { Sparkline } from './Sparkline'
+import { heatStep, quantileThresholds } from './heat'
 
 const series = [
   { date: '2026-01-01', revenue: 50000, orders: 320 },
@@ -17,12 +27,6 @@ const categories = [
   { category: 'Data', value: 410000 },
 ]
 
-const stages = [
-  { stage: 'lead', value: 900000, count: 180 },
-  { stage: 'qualified', value: 620000, count: 96 },
-  { stage: 'proposal', value: 410000, count: 51 },
-  { stage: 'negotiation', value: 260000, count: 24 },
-]
 
 /** Recharts renders into SVG; grab it from the container. */
 function svg(container: HTMLElement) {
@@ -124,53 +128,6 @@ describe('BarChart', () => {
   })
 })
 
-describe('PieChart', () => {
-  it('renders without crashing', () => {
-    const { container } = render(
-      <PieChart data={categories} nameKey="category" valueKey="value" />
-    )
-    expect(svg(container)).toBeInTheDocument()
-  })
-
-  it('shows a legend, so identity is never colour alone', () => {
-    // Entries read "Cloud (46.2%)", so match the label rather than the whole node.
-    const { container } = render(
-      <PieChart data={categories} nameKey="category" valueKey="value" />
-    )
-    categories.forEach((c) => expect(container.textContent).toContain(c.category))
-  })
-})
-
-describe('FunnelChart', () => {
-  it('renders every stage', () => {
-    render(<FunnelChart data={stages} />)
-    stages.forEach((s) => expect(screen.getByText(s.stage)).toBeInTheDocument())
-  })
-
-  it('colours stages with the ordinal ramp, not categorical hues', () => {
-    /*
-     * Funnel stages are ordered, so they take one hue stepped light to dark.
-     * Eight unrelated hues implied the stages were separate identities, and the
-     * palette was indexed with a modulo so a seventh stage reused the first
-     * stage's colour.
-     */
-    const { container } = render(<FunnelChart data={stages} />)
-    const styled = [...container.querySelectorAll<HTMLElement>('[style*="background-color"]')]
-    expect(styled.length).toBeGreaterThan(0)
-    styled.forEach((el) => {
-      expect(el.getAttribute('style')).toContain('--color-ordinal-')
-    })
-  })
-
-  it('reads as monotonic across stages', () => {
-    const { container } = render(<FunnelChart data={stages} />)
-    const steps = [...container.querySelectorAll<HTMLElement>('[style*="--color-ordinal-"]')]
-      .map((el) => Number(el.getAttribute('style')!.match(/--color-ordinal-(\d)/)![1]))
-    // Two marks per stage (swatch and bar); both walk the ramp in order.
-    const unique = [...new Set(steps)]
-    expect(unique).toEqual([...unique].sort((a, b) => a - b))
-  })
-})
 
 describe('AreaChart confidence band', () => {
   const withBand = [
@@ -236,5 +193,224 @@ describe('AreaChart confidence band', () => {
       />
     )
     expect(screen.queryByText('Forecast range')).not.toBeInTheDocument()
+  })
+})
+
+describe('Sparkline', () => {
+  it('draws one path for an unbroken series, plus its fill', () => {
+    const { container } = render(<Sparkline values={[1, 3, 2, 5]} label="Revenue trend" />)
+    expect(screen.getByRole('img', { name: 'Revenue trend' })).toBeInTheDocument()
+    expect(container.querySelectorAll('path').length).toBe(2)
+  })
+
+  it('breaks the line at a null instead of dropping to zero', () => {
+    const { container } = render(<Sparkline values={[1, 3, null, 2, 5]} />)
+    const lines = [...container.querySelectorAll('path')].filter((p) => p.getAttribute('fill') === 'none')
+    expect(lines.length).toBe(2)
+  })
+
+  it('draws nothing for fewer than two points', () => {
+    const { container } = render(<Sparkline values={[4]} />)
+    expect(container.querySelector('svg')).toBeNull()
+  })
+})
+
+describe('RankedBars', () => {
+  const rows = [
+    { key: 'b', label: 'Beta', value: 20, display: '$20' },
+    { key: 'a', label: 'Alpha', value: 50, display: '$50' },
+    { key: 'c', label: 'Gamma', value: 5, display: '$5' },
+  ]
+
+  it('sorts largest first and labels every bar directly', () => {
+    render(<RankedBars rows={rows} />)
+    const labels = screen.getAllByRole('listitem').map((li) => li.textContent)
+    expect(labels[0]).toContain('Alpha')
+    expect(labels[2]).toContain('Gamma')
+    expect(screen.getByText('$50')).toBeInTheDocument()
+  })
+
+  it('keeps a given order for ordered stages', () => {
+    render(<RankedBars rows={rows} keepOrder />)
+    expect(screen.getAllByRole('listitem')[0].textContent).toContain('Beta')
+  })
+
+  it('scales bars against the largest value', () => {
+    const { container } = render(<RankedBars rows={rows} />)
+    const fills = [...container.querySelectorAll<HTMLElement>('li .rounded-full > div')]
+    expect(parseFloat(fills[0].style.width)).toBe(100)
+    expect(parseFloat(fills[1].style.width)).toBe(40)
+  })
+})
+
+describe('heat steps', () => {
+  it('puts a value at a threshold in the step above it', () => {
+    expect(heatStep(10, [10, 20, 30, 40, 50])).toBe(2)
+    expect(heatStep(9.9, [10, 20, 30, 40, 50])).toBe(1)
+    expect(heatStep(99, [10, 20, 30, 40, 50])).toBe(6)
+  })
+
+  it('splits values into six roughly equal groups', () => {
+    const values = Array.from({ length: 600 }, (_, i) => i)
+    const t = quantileThresholds(values)
+    expect(t).toHaveLength(5)
+    const counts = [1, 2, 3, 4, 5, 6].map((s) => values.filter((v) => heatStep(v, t) === s).length)
+    counts.forEach((n) => expect(n).toBeGreaterThan(90))
+  })
+})
+
+describe('CohortHeatmap', () => {
+  const cohorts = [
+    { cohort: '2026-08-01', label: 'Aug 2026', size: 40, retention: [100, 72.5, 61, null] },
+    { cohort: '2026-09-01', label: 'Sep 2026', size: 35, retention: [100, 68.6, null, null] },
+  ]
+
+  it('prints month 0 without shading it', () => {
+    render(<CohortHeatmap cohorts={cohorts} />)
+    const zero = screen.getAllByText('100')[0]
+    expect(zero.getAttribute('style')).toBeNull()
+  })
+
+  it('shades and labels every measured month', () => {
+    render(<CohortHeatmap cohorts={cohorts} />)
+    const cell = screen.getByText('73')
+    expect(cell.getAttribute('style')).toContain('--color-heat-')
+    expect(cell.getAttribute('title')).toContain('72.5%')
+  })
+
+  it('leaves months not yet reached empty rather than zero', () => {
+    render(<CohortHeatmap cohorts={cohorts} />)
+    expect(screen.getAllByLabelText('Not reached yet')).toHaveLength(3)
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
+  })
+})
+
+describe('CalendarHeatmap', () => {
+  const days = Array.from({ length: 10 }, (_, i) => ({
+    date: `2026-11-${String(i + 2).padStart(2, '0')}`,
+    week: Math.floor(i / 7),
+    weekday: i % 7,
+    revenue: i % 7 >= 5 ? 0 : 1000 * (i + 1),
+  }))
+
+  it('draws one cell per day', () => {
+    const { container } = render(<CalendarHeatmap days={days} />)
+    expect(container.querySelectorAll('rect')).toHaveLength(10)
+  })
+
+  it('shows a day with no orders as empty, not as the lowest step', () => {
+    const { container } = render(<CalendarHeatmap days={days} />)
+    const weekend = container.querySelectorAll('rect')[5]
+    expect(weekend.getAttribute('fill')).toBe('var(--color-heat-empty)')
+  })
+
+  it('names the best day', () => {
+    render(<CalendarHeatmap days={days} />)
+    expect(screen.getByText(/Highest day Nov 11/)).toBeInTheDocument()
+  })
+})
+
+describe('AttainmentBars', () => {
+  const reps = [
+    { id: 1, name: 'Ana', team: 'Enterprise', region: 'Europe', quota: 1e6, periodQuota: 250000, achieved: 300000, deals: 10, attainment: 120 },
+    { id: 2, name: 'Ben', team: 'SMB', region: 'Europe', quota: 1e6, periodQuota: 250000, achieved: 200000, deals: 8, attainment: 80 },
+    { id: 3, name: 'Cy', team: 'Mid-Market', region: 'Europe', quota: 1e6, periodQuota: 250000, achieved: 250000, deals: 9, attainment: 100 },
+  ]
+
+  it('ranks reps by attainment and counts those at or above quota', () => {
+    render(<AttainmentBars reps={reps} />)
+    const rows = screen.getAllByRole('listitem').filter((li) => li.textContent?.includes('%'))
+    expect(rows[0].textContent).toContain('Ana')
+    expect(screen.getByText('2', { selector: 'span' })).toBeInTheDocument()
+  })
+
+  it('names every team in the legend', () => {
+    render(<AttainmentBars reps={reps} />)
+    for (const team of ['Enterprise', 'Mid-Market', 'SMB']) {
+      expect(screen.getByText(team)).toBeInTheDocument()
+    }
+  })
+})
+
+describe('charts with a legend above the plot', () => {
+  it('ComparisonChart names both years', () => {
+    const points = [
+      { date: '2026-08-03', label: 'Aug 3', previousDate: '2025-08-04', previousLabel: 'Aug 4', current: 10, previous: 8 },
+      { date: '2026-08-10', label: 'Aug 10', previousDate: '2025-08-11', previousLabel: 'Aug 11', current: 12, previous: 9 },
+    ]
+    render(<ComparisonChart data={points} height={300} />)
+    expect(screen.getAllByText('This year').length).toBeGreaterThan(0)
+    expect(screen.getByText('Same period last year')).toBeInTheDocument()
+  })
+
+  it('ForecastChart lists the backtest only when there is one', () => {
+    const base = { lowerBound: null, upperBound: null, lower95: null, upper95: null }
+    const { rerender } = render(
+      <ForecastChart height={300} data={[{ date: '2026-09-01', actual: 5, predicted: null, backtest: 4.8, ...base }]} />,
+    )
+    expect(screen.getByText('Backtest on held-out months')).toBeInTheDocument()
+    rerender(<ForecastChart height={300} data={[{ date: '2026-09-01', actual: 5, predicted: null, backtest: null, ...base }]} />)
+    expect(screen.queryByText('Backtest on held-out months')).not.toBeInTheDocument()
+  })
+
+  it('RiskScatter shows three segments', () => {
+    render(
+      <RiskScatter
+        height={300}
+        threshold={0.5}
+        points={[{ id: 1, company: 'Acme', segment: 'smb', riskScore: 0.7, annualRevenue: 50000 }]}
+      />,
+    )
+    for (const s of ['Enterprise', 'Mid-market', 'SMB']) expect(screen.getByText(s)).toBeInTheDocument()
+  })
+
+  it('SeasonalityChart explains its two colours', () => {
+    render(<SeasonalityChart height={300} data={[{ month: 'Jan', index: 0.9, trend: null }, { month: 'Dec', index: 1.2, trend: null }]} />)
+    expect(screen.getByText('Above an average month')).toBeInTheDocument()
+    expect(screen.getByText('Below')).toBeInTheDocument()
+  })
+})
+
+describe('SmallMultiples', () => {
+  const data = {
+    granularity: 'month' as const,
+    keys: ['North America', 'Middle East'],
+    points: [
+      { date: '2026-09-01', label: 'Sep 2026', 'North America': 100, 'Middle East': 10 },
+      { date: '2026-10-01', label: 'Oct 2026', 'North America': 120, 'Middle East': 14 },
+    ],
+    totals: [
+      { region: 'North America', revenue: 220, previous: 200, change: 10 },
+      { region: 'Middle East', revenue: 24, previous: 30, change: -20 },
+    ],
+  }
+
+  it('gives every region a panel with its total and signed change', () => {
+    render(<SmallMultiples data={data} monthly />)
+    expect(screen.getByText('North America')).toBeInTheDocument()
+    expect(screen.getByText('+10.0%')).toBeInTheDocument()
+    expect(screen.getByText('-20.0%')).toBeInTheDocument()
+  })
+})
+
+describe('SankeyChart', () => {
+  it('renders the flow without throwing', () => {
+    const flow = {
+      nodes: ['Lead', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost', 'Open'].map((name) => ({ name })),
+      links: [
+        { source: 0, target: 1, value: 6, amount: 600 },
+        { source: 0, target: 5, value: 4, amount: 400 },
+        { source: 1, target: 2, value: 5, amount: 500 },
+        { source: 1, target: 6, value: 1, amount: 100 },
+        { source: 2, target: 3, value: 3, amount: 300 },
+        { source: 2, target: 5, value: 2, amount: 200 },
+        { source: 3, target: 4, value: 2, amount: 200 },
+        { source: 3, target: 6, value: 1, amount: 100 },
+      ],
+      created: 10,
+      startDate: '2025-11-07',
+      endDate: '2026-11-06',
+    }
+    expect(() => render(<SankeyChart flow={flow} height={300} />)).not.toThrow()
   })
 })

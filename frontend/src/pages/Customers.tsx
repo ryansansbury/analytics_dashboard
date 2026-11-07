@@ -1,274 +1,305 @@
-import { Users, UserPlus, UserMinus, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, AlertTriangle, UserMinus } from 'lucide-react';
 import { Header } from '../components/layout/Header';
-import { KPICard } from '../components/cards/KPICard';
+import { KPICard, KPIGrid } from '../components/cards/KPICard';
 import { ChartCard } from '../components/cards/ChartCard';
-import { AreaChart } from '../components/charts/AreaChart';
 import { BarChart } from '../components/charts/BarChart';
-import { DonutChart } from '../components/charts/PieChart';
+import { CohortHeatmap } from '../components/charts/CohortHeatmap';
+import { RankedBars } from '../components/charts/RankedBars';
 import { DataTable } from '../components/tables/DataTable';
-import { formatCurrency } from '../utils/formatters';
+import { colorFor, colorsFor, labelFor } from '../utils/colors';
+import { daysInclusive, formatCurrency, formatNumber, formatShare } from '../utils/formatters';
 import {
+  useAtRiskCustomers,
+  useCohorts,
+  useCustomerAcquisition,
   useCustomerOverview,
   useCustomerSegments,
-  useCustomerCohorts,
-  useAtRiskCustomers,
   useLifetimeValue,
-  useCustomerAcquisition,
 } from '../hooks/useApi';
 import { useFilters } from '../hooks/useFilters';
+import type { Cohort, SplitPoint } from '../types';
+
+const SEGMENT_ORDER = ['enterprise', 'mid-market', 'smb'];
 
 export function Customers() {
   const { filters } = useFilters();
+  const { startDate, endDate } = filters.dateRange;
+  const comparison = `vs prior ${daysInclusive(startDate, endDate)} days`;
 
-  // Fetch data from API
-  const { data: overview, isLoading: overviewLoading } = useCustomerOverview();
-  const { data: segments, isLoading: segmentsLoading } = useCustomerSegments();
-  const { data: cohorts, isLoading: cohortsLoading } = useCustomerCohorts();
-  const { data: atRiskCustomers, isLoading: atRiskLoading } = useAtRiskCustomers(10);
-  const { data: ltvData, isLoading: ltvLoading } = useLifetimeValue();
-  const { data: acquisitionData, isLoading: acquisitionLoading } = useCustomerAcquisition();
+  const overview = useCustomerOverview();
+  const cohorts = useCohorts();
+  const segments = useCustomerSegments();
+  const acquisition = useCustomerAcquisition();
+  const ltv = useLifetimeValue();
+  const atRisk = useAtRiskCustomers(10);
 
-  // Transform data
-  const segmentData = (segments || []).map(item => ({
-    segment: item.segment,
-    count: item.count,
-    revenue: item.revenue,
-  }));
-
-  const atRiskData = (atRiskCustomers || []).map((item) => ({
-    id: item.id,
-    company: item.company || item.name,
-    segment: item.segment,
-    ltv: item.lifetimeValue,
-    riskScore: item.riskScore ?? null,
-  }));
-
-  // Transform LTV data for bar chart
-  const ltvChartData = (ltvData || []).map(item => ({
-    range: item.range,
-    count: item.count,
-  }));
-
-  // Aggregate acquisition data by date (sum all channels)
-  const acquisitionByDate = (acquisitionData || []).reduce((acc, item) => {
-    const existing = acc.find(a => a.date === item.date);
-    if (existing) {
-      existing.customers += item.count;
-    } else {
-      acc.push({ date: item.date, customers: item.count });
-    }
-    return acc;
-  }, [] as { date: string; customers: number }[]).sort((a, b) => a.date.localeCompare(b.date));
-
-  // Transform cohort data for display - 12 months
-  const cohortTableData = (cohorts || []).map(cohort => ({
-    cohort: cohort.cohort,
-    m0: cohort.month0 ?? null,
-    m1: cohort.month1 ?? null,
-    m2: cohort.month2 ?? null,
-    m3: cohort.month3 ?? null,
-    m4: cohort.month4 ?? null,
-    m5: cohort.month5 ?? null,
-    m6: cohort.month6 ?? null,
-    m7: cohort.month7 ?? null,
-    m8: cohort.month8 ?? null,
-    m9: cohort.month9 ?? null,
-    m10: cohort.month10 ?? null,
-    m11: cohort.month11 ?? null,
-  }));
+  const o = overview.data;
+  const threshold = Math.round((o?.atRiskThreshold ?? 0.5) * 100);
+  const channelKeys = acquisition.data?.keys ?? [];
+  const monthly = acquisition.data?.granularity === 'month';
+  const segmentRows = [...(segments.data ?? [])].sort(
+    (a, b) => SEGMENT_ORDER.indexOf(a.segment) - SEGMENT_ORDER.indexOf(b.segment),
+  );
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <Header
-        title="Customer Analytics"
-        subtitle={`${filters.dateRange.startDate} to ${filters.dateRange.endDate}`}
-      />
-
-      {/* Content area with flexible row heights */}
-      <div className="flex-1 p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
-        {/* Row 1: KPIs - auto height */}
-        <div className="flex-shrink-0 grid grid-cols-4 gap-2">
+    <>
+      <Header title="Customers" />
+      <div className="mx-auto max-w-[1680px] space-y-4 p-4 lg:p-6">
+        <KPIGrid>
           <KPICard
-            label="Active Customers"
-            value={overview?.total ?? null}
-            changePercent={overview?.totalChange ?? null}
-            format="number"
-            icon={<Users className="h-4 w-4" />}
-            loading={overviewLoading}
+            label="Active customers"
+            value={o?.total ?? null}
+            changePercent={o?.totalChange}
+            comparison={comparison}
+            caption="Placed a completed order in the period"
+            icon={<Users className="h-3.5 w-3.5" />}
+            loading={overview.isLoading}
           />
           <KPICard
-            label="New This Period"
-            value={overview?.new ?? null}
-            changePercent={overview?.newChange ?? null}
-            format="number"
-            icon={<UserPlus className="h-4 w-4" />}
-            loading={overviewLoading}
+            label="New customers"
+            value={o?.new ?? null}
+            changePercent={o?.newChange}
+            comparison={comparison}
+            caption="First order in the period"
+            icon={<UserPlus className="h-3.5 w-3.5" />}
+            loading={overview.isLoading}
+          />
+          <KPICard
+            label="At risk"
+            value={o?.atRisk ?? null}
+            caption={`${threshold}% or higher chance of no order in 90 days`}
+            icon={<AlertTriangle className="h-3.5 w-3.5" />}
+            loading={overview.isLoading}
           />
           <KPICard
             label="Churned"
-            value={overview?.churned ?? null}
-            changePercent={overview?.churnedChange ?? null}
-            format="number"
-            icon={<UserMinus className="h-4 w-4" />}
-            loading={overviewLoading}
+            value={o?.churned ?? null}
+            caption="All time as recorded on the account"
+            icon={<UserMinus className="h-3.5 w-3.5" />}
+            loading={overview.isLoading}
           />
-          <KPICard
-            label="At Risk"
-            value={overview?.atRisk ?? null}
-            changePercent={overview?.atRiskChange ?? null}
-            format="number"
-            icon={<AlertTriangle className="h-4 w-4" />}
-            loading={overviewLoading}
-          />
-        </div>
+        </KPIGrid>
 
-        {/* Row 2: Segments + At Risk - 35% */}
-        <div className="flex-[35] min-h-0 grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <ChartCard
-            title="Customer Segments"
-            subtitle="By business size"
-            loading={segmentsLoading}
+            className="h-[480px] lg:col-span-2"
+            title="Retention by first-purchase cohort"
+            subtitle="Percent of each month's new customers who ordered again in each month after"
+            loading={cohorts.isLoading}
+            error={cohorts.error}
+            flow
+            table={{
+              filename: 'cohort-retention',
+              rows: cohorts.data ?? [],
+              columns: [
+                { key: 'label', header: 'Cohort' },
+                { key: 'size', header: 'Customers', align: 'right' },
+                ...Array.from({ length: 12 }, (_, m) => ({
+                  key: `m${m}`,
+                  header: `M${m}`,
+                  align: 'right' as const,
+                  format: (r: Cohort) => (r.retention[m] == null ? '' : `${r.retention[m]}%`),
+                  raw: (r: Cohort) => r.retention[m] ?? '',
+                })),
+              ],
+            }}
           >
-            <DonutChart
-              data={segmentData}
-              nameKey="segment"
-              valueKey="count"
-              formatValue="number"
-            />
+            <CohortHeatmap cohorts={cohorts.data ?? []} />
           </ChartCard>
 
           <ChartCard
-            title="Revenue by Segment"
-            subtitle="Distribution"
-            loading={segmentsLoading}
+            className="h-[480px]"
+            title="Revenue by segment"
+            subtitle="Customers active in the period and what they spent"
+            loading={segments.isLoading}
+            error={segments.error}
+            flow
+            table={{
+              filename: 'revenue-by-segment',
+              rows: segmentRows,
+              columns: [
+                { key: 'segment', header: 'Segment', format: (r) => labelFor(r.segment) },
+                { key: 'count', header: 'Customers', align: 'right' },
+                { key: 'revenue', header: 'Revenue', align: 'right', format: (r) => formatCurrency(r.revenue) },
+              ],
+            }}
           >
-            <BarChart
-              data={segmentData}
-              xKey="segment"
-              yKeys={['revenue']}
-            />
-          </ChartCard>
-
-          <ChartCard
-            title="At-Risk Customers"
-            subtitle="Potential churn"
-            loading={atRiskLoading}
-          >
-            <DataTable
-              data={atRiskData}
-              keyExtractor={(row) => row.id}
-              columns={[
-                { key: 'company', header: 'Company', sortable: true, width: '40%' },
-                { key: 'segment', header: 'Segment', sortable: true, width: '25%' },
-                {
-                  key: 'ltv',
-                  header: 'LTV',
-                  sortable: true,
-                  align: 'right',
-                  width: '20%',
-                  render: (value) => formatCurrency(value as number, true),
-                },
-                {
-                  key: 'riskScore',
-                  header: 'Risk',
-                  sortable: true,
-                  align: 'right',
-                  width: '15%',
-                  render: (value) => {
-                    const score = value as number;
-                    const color = score >= 0.7 ? 'text-danger' : score >= 0.5 ? 'text-warning' : 'text-success';
-                    return (
-                      <span className={`font-medium ${color}`}>
-                        {(score * 100).toFixed(0)}%
-                      </span>
-                    );
-                  },
-                },
-              ]}
-              compact
-            />
-          </ChartCard>
-        </div>
-
-        {/* Row 3: Customer Acquisition + LTV Distribution - 35% */}
-        <div className="flex-[35] min-h-0 grid grid-cols-2 gap-2">
-          <ChartCard
-            title="Customer Acquisition"
-            subtitle="New customers over time"
-            loading={acquisitionLoading}
-          >
-            <AreaChart
-              data={acquisitionByDate}
-              xKey="date"
-              yKeys={['customers']}
-              labels={{ customers: 'Customers' }}
-              formatY="number"
-            />
-          </ChartCard>
-
-          <ChartCard
-            title="Lifetime Value Distribution"
-            subtitle="Customer count by LTV range"
-            loading={ltvLoading}
-          >
-            <BarChart
-              data={ltvChartData}
-              xKey="range"
-              yKeys={['count']}
-              formatY="number"
-              ordinal
-            />
-          </ChartCard>
-        </div>
-
-        {/* Row 4: Cohort Retention - 30% */}
-        <div className="flex-[30] min-h-0">
-          <ChartCard
-            title="Cohort Retention Analysis"
-            subtitle="12 month customer retention by signup cohort"
-            loading={cohortsLoading}
-          >
-            <div className="overflow-auto h-full">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-gray-700">
-                    <th className="px-2 py-1 text-left font-medium text-gray-400 sticky left-0 bg-gray-900 z-10">Cohort</th>
-                    {['M0','M1','M2','M3','M4','M5','M6','M7','M8','M9','M10','M11'].map(m => (
-                      <th key={m} className="px-1 py-1 text-center font-medium text-gray-400 min-w-[40px]">{m}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {cohortTableData.length > 0 ? cohortTableData.map((row) => (
-                    <tr key={row.cohort} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                      <td className="px-2 py-0.5 text-gray-200 font-medium sticky left-0 bg-gray-900 z-10">{row.cohort}</td>
-                      {[row.m0, row.m1, row.m2, row.m3, row.m4, row.m5, row.m6, row.m7, row.m8, row.m9, row.m10, row.m11].map((val, i) => (
-                        <td
-                          key={i}
-                          className="px-1 py-0.5 text-center"
-                          style={{
-                            backgroundColor: val > 0 ? `rgba(59, 130, 246, ${val / 100 * 0.7})` : 'transparent',
-                          }}
-                        >
-                          <span className={val > 0 ? 'text-white font-medium' : 'text-gray-600'}>
-                            {val > 0 ? `${val}%` : '-'}
-                          </span>
-                        </td>
-                      ))}
-                    </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan={13} className="px-4 py-4 text-center text-gray-500">
-                        No cohort data available
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="space-y-5">
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-gray-500">Revenue</p>
+                <RankedBars
+                  keepOrder
+                  rows={segmentRows.map((s) => ({
+                    key: s.segment,
+                    label: labelFor(s.segment),
+                    value: s.revenue,
+                    display: formatCurrency(s.revenue, true),
+                    color: colorFor('segment', s.segment),
+                  }))}
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-gray-500">Active customers</p>
+                <RankedBars
+                  keepOrder
+                  rows={segmentRows.map((s) => ({
+                    key: s.segment,
+                    label: labelFor(s.segment),
+                    value: s.count,
+                    display: formatNumber(s.count),
+                    color: colorFor('segment', s.segment),
+                  }))}
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-gray-500">Revenue per customer</p>
+                <RankedBars
+                  keepOrder
+                  rows={segmentRows.map((s) => ({
+                    key: s.segment,
+                    label: labelFor(s.segment),
+                    value: s.count ? s.revenue / s.count : 0,
+                    display: formatCurrency(s.count ? s.revenue / s.count : 0, true),
+                    color: colorFor('segment', s.segment),
+                  }))}
+                />
+              </div>
             </div>
           </ChartCard>
         </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <ChartCard
+            className="h-[320px] lg:col-span-2"
+            title="New customers by acquisition channel"
+            subtitle={monthly ? 'Counted in whole months' : acquisition.data?.granularity === 'week' ? 'Counted in whole weeks' : 'Counted by day'}
+            loading={acquisition.isLoading}
+            error={acquisition.error}
+            table={{
+              filename: 'new-customers-by-channel',
+              rows: acquisition.data?.points ?? [],
+              columns: [
+                { key: 'label', header: 'Period' },
+                ...channelKeys.map((key) => ({
+                  key,
+                  header: key,
+                  align: 'right' as const,
+                  format: (r: SplitPoint) => String(r[key]),
+                })),
+              ],
+            }}
+          >
+            <BarChart
+              data={acquisition.data?.points ?? []}
+              xKey="label"
+              yKeys={channelKeys}
+              labels={Object.fromEntries(channelKeys.map((key) => [key, key]))}
+              colors={colorsFor('acquisition', channelKeys)}
+              formatY="number"
+              formatX={(label) => (monthly ? label.split(' ')[0] : label)}
+              stacked
+              showTotal
+            />
+          </ChartCard>
+
+          <ChartCard
+            className="h-[320px]"
+            title="Lifetime value"
+            subtitle="Every customer to date by revenue so far"
+            loading={ltv.isLoading}
+            error={ltv.error}
+            flow
+            table={{
+              filename: 'lifetime-value',
+              rows: ltv.data ?? [],
+              columns: [
+                { key: 'range', header: 'Lifetime value' },
+                { key: 'count', header: 'Customers', align: 'right' },
+                { key: 'percentage', header: 'Share', align: 'right', format: (r) => `${r.percentage}%` },
+              ],
+            }}
+          >
+            {/* Bands as rows, so every band's name fits on its line. As columns in a
+              * third-width card the seven labels ran into each other. */}
+            <RankedBars
+              keepOrder
+              dense
+              labelWidth="36%"
+              rows={(ltv.data ?? []).map((b) => ({
+                key: b.range,
+                label: b.range,
+                value: b.count,
+                display: b.count.toLocaleString(),
+                share: formatShare(b.percentage),
+              }))}
+            />
+          </ChartCard>
+        </div>
+
+        <ChartCard
+          title="Accounts most likely to stop buying"
+          subtitle="Live customers ranked by the churn model's probability of no order in the next 90 days"
+          loading={atRisk.isLoading}
+          error={atRisk.error}
+          flow
+          noPadding
+        >
+          <DataTable
+            data={(atRisk.data ?? []).map((c) => ({ ...c }))}
+            keyExtractor={(row) => Number(row.id)}
+            className="[&>table]:min-w-[640px]"
+            compact
+            columns={[
+              { key: 'company', header: 'Account', sortable: true },
+              { key: 'segment', header: 'Segment', sortable: true, render: (v) => labelFor(String(v)) },
+              {
+                key: 'riskScore',
+                header: 'Churn probability',
+                sortable: true,
+                align: 'right',
+                render: (v) => <RiskCell value={Number(v)} />,
+              },
+              {
+                key: 'daysSinceActivity',
+                header: 'Last order',
+                sortable: true,
+                align: 'right',
+                render: (v) => `${Number(v)} days ago`,
+              },
+              {
+                key: 'annualRevenue',
+                header: 'Last 12 months',
+                sortable: true,
+                align: 'right',
+                render: (v) => formatCurrency(Number(v), true),
+              },
+              {
+                key: 'lifetimeValue',
+                header: 'Lifetime',
+                sortable: true,
+                align: 'right',
+                render: (v) => formatCurrency(Number(v), true),
+              },
+              { key: 'recommendation', header: 'Next step' },
+            ]}
+          />
+        </ChartCard>
       </div>
-    </div>
+    </>
+  );
+}
+
+function RiskCell({ value }: { value: number }) {
+  const pct = Math.round(value * 100);
+  return (
+    <span className="inline-flex items-center justify-end gap-2">
+      <span className="hidden h-1.5 w-16 rounded-full bg-gray-800 sm:block" aria-hidden="true">
+        <span
+          className="block h-full rounded-full"
+          style={{ width: `${pct}%`, background: 'var(--color-status-critical)' }}
+        />
+      </span>
+      <span className="w-9 tabular-nums">{pct}%</span>
+    </span>
   );
 }

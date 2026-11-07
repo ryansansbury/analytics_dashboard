@@ -1,12 +1,18 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { subDays, subMonths, startOfYear, format } from 'date-fns';
+import { addDays, subDays, subMonths, startOfYear, format } from 'date-fns';
 import type { DateRange, FilterState } from '../types';
 import { today as currentDate } from '../services/staticData';
 
 type DatePreset = 'last7d' | 'last30d' | 'last90d' | 'ytd' | 'lastYear' | 'custom';
 
+/**
+ * Both ends of a window are inclusive, so "Last 7 days" starts six days back.
+ * It used to start seven back and hold eight days, and once the headline
+ * figures began saying what they compare against, the cards read "vs prior
+ * 366 days". `endpoints_for` in backend/scripts/snapshot.py mirrors this.
+ */
 function getDateRangeFromPreset(preset: DatePreset): DateRange {
   // Live, this is the actual date. In the static demo it is the date the
   // snapshot was taken, so a preset resolves to the window the snapshot holds
@@ -17,19 +23,19 @@ function getDateRangeFromPreset(preset: DatePreset): DateRange {
   switch (preset) {
     case 'last7d':
       return {
-        startDate: formatDate(subDays(today, 7)),
+        startDate: formatDate(subDays(today, 6)),
         endDate: formatDate(today),
         preset,
       };
     case 'last30d':
       return {
-        startDate: formatDate(subDays(today, 30)),
+        startDate: formatDate(subDays(today, 29)),
         endDate: formatDate(today),
         preset,
       };
     case 'last90d':
       return {
-        startDate: formatDate(subDays(today, 90)),
+        startDate: formatDate(subDays(today, 89)),
         endDate: formatDate(today),
         preset,
       };
@@ -41,13 +47,13 @@ function getDateRangeFromPreset(preset: DatePreset): DateRange {
       };
     case 'lastYear':
       return {
-        startDate: formatDate(subMonths(today, 12)),
+        startDate: formatDate(addDays(subMonths(today, 12), 1)),
         endDate: formatDate(today),
         preset,
       };
     default:
       return {
-        startDate: formatDate(subDays(today, 30)),
+        startDate: formatDate(subDays(today, 29)),
         endDate: formatDate(today),
         preset: 'last30d',
       };
@@ -74,9 +80,22 @@ const FilterContext = createContext<FilterContextType | undefined>(undefined);
  * what "today" is. The default range would then be computed against the real
  * clock and miss the snapshot, while every range the user picked afterwards hit.
  */
+const PRESETS: DatePreset[] = ['last7d', 'last30d', 'last90d', 'ytd', 'lastYear'];
+
+/**
+ * Last 90 days, unless the address names a preset with `?range=`. That makes
+ * a view shareable as a link, and lets the screenshot script open any range
+ * directly.
+ */
+function initialPreset(): DatePreset {
+  if (typeof window === 'undefined') return 'last90d';
+  const param = new URLSearchParams(window.location.search).get('range') as DatePreset | null;
+  return param && PRESETS.includes(param) ? param : 'last90d';
+}
+
 function makeDefaultFilters(): FilterState {
   return {
-    dateRange: getDateRangeFromPreset('last90d'),
+    dateRange: getDateRangeFromPreset(initialPreset()),
     region: undefined,
     segment: undefined,
     category: undefined,

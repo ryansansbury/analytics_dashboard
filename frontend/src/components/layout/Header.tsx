@@ -1,199 +1,109 @@
-import { RefreshCw, Moon, Sun, Bell, X } from 'lucide-react';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { RefreshCw, Moon, Sun } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useFilters, type DatePreset } from '../../hooks/useFilters';
+import { formatDateRange } from '../../utils/formatters';
 
 interface HeaderProps {
   title: string;
+  /** Overrides the date range shown under the title. */
   subtitle?: string;
 }
 
-const datePresets: { value: DatePreset; label: string }[] = [
-  { value: 'last7d', label: 'Last 7 days' },
-  { value: 'last30d', label: 'Last 30 days' },
-  { value: 'last90d', label: 'Last 90 days' },
-  { value: 'ytd', label: 'Year to date' },
-  { value: 'lastYear', label: 'Last 12 months' },
+const datePresets: { value: DatePreset; label: string; short: string }[] = [
+  { value: 'last7d', label: 'Last 7 days', short: '7D' },
+  { value: 'last30d', label: 'Last 30 days', short: '30D' },
+  { value: 'last90d', label: 'Last 90 days', short: '90D' },
+  { value: 'ytd', label: 'Year to date', short: 'YTD' },
+  { value: 'lastYear', label: 'Last 12 months', short: '12M' },
 ];
 
-const mockNotifications = [
-  { id: 1, message: 'Revenue target exceeded by 15%', time: '2 hours ago', read: false },
-  { id: 2, message: 'New enterprise customer signed', time: '5 hours ago', read: false },
-  { id: 3, message: 'Pipeline milestone reached', time: '1 day ago', read: true },
-];
+/**
+ * Light unless the visitor chose dark, either earlier on this device or with
+ * `?theme=dark` in the address. The parameter is how the screenshot script
+ * captures both themes without clicking anything, and it persists like a click.
+ */
+function initialDarkMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  const param = new URLSearchParams(window.location.search).get('theme');
+  if (param === 'dark' || param === 'light') {
+    localStorage.setItem('darkMode', String(param === 'dark'));
+    return param === 'dark';
+  }
+  return localStorage.getItem('darkMode') === 'true';
+}
 
 export function Header({ title, subtitle }: HeaderProps) {
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('darkMode') === 'true';
-    }
-    return false;
-  });
+  const [darkMode, setDarkMode] = useState(initialDarkMode);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState(mockNotifications);
   const { filters, setDatePreset } = useFilters();
   const queryClient = useQueryClient();
-  const notifRef = useRef<HTMLDivElement>(null);
 
-  // Initialize dark mode on mount
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
-
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await queryClient.invalidateQueries();
-    setTimeout(() => setIsRefreshing(false), 1000);
+    setTimeout(() => setIsRefreshing(false), 600);
   }, [queryClient]);
 
   const toggleDarkMode = useCallback(() => {
     setDarkMode((prev) => {
-      const newValue = !prev;
-      localStorage.setItem('darkMode', String(newValue));
-      if (newValue) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      return newValue;
+      const next = !prev;
+      localStorage.setItem('darkMode', String(next));
+      return next;
     });
   }, []);
 
-  const markNotificationRead = useCallback((id: number) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
-  }, []);
-
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const { startDate, endDate, preset } = filters.dateRange;
 
   return (
-    <header className="sticky top-0 z-30 bg-gray-900/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 dark:border-gray-800 h-12 flex-shrink-0">
-      <div className="flex items-center justify-between px-4 h-full">
-        {/* Title */}
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-white">{title}</h1>
-          {subtitle && (
-            <p className="text-xs text-gray-400">|&nbsp; {subtitle}</p>
-          )}
+    <header className="sticky top-0 z-30 border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5 lg:h-14 lg:flex-nowrap lg:px-6 lg:py-0">
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold text-white lg:text-lg">{title}</h1>
+          <p className="text-xs text-gray-400">{subtitle ?? formatDateRange(startDate, endDate)}</p>
         </div>
 
-        {/* Controls */}
         <div className="flex items-center gap-2">
-          {/* Date Range Selector */}
-          <div className="flex items-center bg-gray-800 rounded-md p-0.5">
-            {datePresets.map((preset) => (
+          <div className="flex items-center rounded-lg bg-gray-800 p-0.5" role="group" aria-label="Date range">
+            {datePresets.map((p) => (
               <button
-                key={preset.value}
-                onClick={() => setDatePreset(preset.value)}
+                key={p.value}
+                onClick={() => setDatePreset(p.value)}
+                aria-pressed={preset === p.value}
+                title={p.label}
                 className={clsx(
-                  'px-2 py-1 text-xs font-medium rounded transition-all',
-                  filters.dateRange.preset === preset.value
+                  'rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                  preset === p.value
                     ? 'bg-primary-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                    : 'text-gray-400 hover:bg-gray-700 hover:text-white',
                 )}
               >
-                {preset.label}
+                <span className="hidden xl:inline">{p.label}</span>
+                <span className="xl:hidden">{p.short}</span>
               </button>
             ))}
           </div>
 
-          {/* Action Buttons */}
           <div className="flex items-center gap-0.5">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50"
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white disabled:opacity-50"
               aria-label="Refresh data"
             >
-              <RefreshCw
-                className={clsx('h-4 w-4', isRefreshing && 'animate-spin')}
-              />
+              <RefreshCw className={clsx('h-4 w-4', isRefreshing && 'animate-spin')} />
             </button>
-
-            {/* Notifications Dropdown */}
-            <div className="relative" ref={notifRef}>
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors relative"
-                aria-label="Notifications"
-              >
-                <Bell className="h-4 w-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full flex items-center justify-center">
-                    <span className="sr-only">{unreadCount} unread</span>
-                  </span>
-                )}
-              </button>
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-50">
-                  <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-white">Notifications</h3>
-                    <button
-                      onClick={() => setShowNotifications(false)}
-                      className="text-gray-400 hover:text-white"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {notifications.map((notif) => (
-                      <button
-                        key={notif.id}
-                        onClick={() => markNotificationRead(notif.id)}
-                        className={clsx(
-                          'w-full px-4 py-3 text-left border-b border-gray-700 last:border-0 hover:bg-gray-700 transition-colors',
-                          !notif.read && 'bg-gray-750'
-                        )}
-                      >
-                        <div className="flex items-start gap-2">
-                          {!notif.read && (
-                            <span className="mt-1.5 h-2 w-2 bg-primary-500 rounded-full flex-shrink-0" />
-                          )}
-                          <div className={clsx(!notif.read ? '' : 'ml-4')}>
-                            <p className="text-sm text-gray-200">{notif.message}</p>
-                            <p className="text-xs text-gray-500 mt-1">{notif.time}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="px-4 py-2 border-t border-gray-700">
-                    <button className="text-sm text-primary-400 hover:text-primary-300">
-                      View all notifications
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
             <button
               onClick={toggleDarkMode}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors"
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
               aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
-              {darkMode ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
-              )}
+              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
           </div>
         </div>

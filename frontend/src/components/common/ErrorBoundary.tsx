@@ -74,7 +74,7 @@ export function ErrorMessage({
   onRetry,
 }: ErrorMessageProps) {
   return (
-    <div className="flex flex-col items-center justify-center p-8 text-center">
+    <div className="flex flex-col items-center justify-center p-8 text-center" role="alert" data-chart-error="">
       <div className="bg-danger/10 p-3 rounded-full mb-3">
         <AlertTriangle className="h-6 w-6 text-danger" />
       </div>

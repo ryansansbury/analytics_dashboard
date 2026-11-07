@@ -1,6 +1,7 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import clsx from 'clsx';
-import { formatCurrency, formatNumber, formatPercent } from '../../utils/formatters';
+import { formatChange, formatCurrency, formatNumber } from '../../utils/formatters';
+import { Sparkline } from '../charts/Sparkline';
 
 interface KPICardProps {
   label: string;
@@ -14,18 +15,25 @@ interface KPICardProps {
    * admitting it does not know.
    */
   value: number | null;
-  previousValue?: number;
-  change?: number;
   /**
-   * Percentage change against the prior period.
+   * Change against the prior period, in `changeUnit`.
    *
-   * `null` is meaningful and distinct from a zero: it means the API had no
-   * prior observation to compare against, so no delta exists. Several
-   * forecasting KPIs return null for exactly this reason rather than inventing
-   * a number. Both null and undefined suppress the badge entirely.
+   * `null` is meaningful and distinct from a zero: it means there was no prior
+   * observation to compare against, so no delta exists. Both null and
+   * undefined suppress the badge entirely.
    */
   changePercent?: number | null;
-  format?: 'currency' | 'number' | 'percent';
+  /** Percentage points for figures that are already percentages, like win rate. */
+  changeUnit?: '%' | 'pts';
+  /** For figures where down is good, like cycle time: a fall is shown as good news. */
+  invert?: boolean;
+  /** What the change compares against, shown beside the badge. */
+  comparison?: string;
+  format?: 'currency' | 'number' | 'percent' | 'days';
+  /** One value per bucket, drawn as a sparkline. */
+  trend?: (number | null)[];
+  /** A line of context under the value. */
+  caption?: string;
   icon?: React.ReactNode;
   className?: string;
   loading?: boolean;
@@ -34,10 +42,13 @@ interface KPICardProps {
 export function KPICard({
   label,
   value,
-  previousValue: _previousValue,
-  change: _change,
   changePercent,
+  changeUnit = '%',
+  invert = false,
+  comparison,
   format = 'number',
+  trend,
+  caption,
   icon,
   className,
   loading = false,
@@ -49,6 +60,8 @@ export function KPICard({
         return formatCurrency(value, true);
       case 'percent':
         return `${value.toFixed(1)}%`;
+      case 'days':
+        return `${value.toFixed(0)} days`;
       default:
         return formatNumber(value, true);
     }
@@ -57,85 +70,59 @@ export function KPICard({
   // Loose inequality on purpose: catches null and undefined together. Using
   // `!== undefined` here rendered a "+0.0%" badge whenever the API sent null.
   const hasChange = changePercent != null;
-
-  const trend = hasChange
-    ? changePercent > 0
-      ? 'up'
-      : changePercent < 0
-        ? 'down'
-        : 'neutral'
-    : 'neutral';
-
-  const TrendIcon = trend === 'up'
-    ? TrendingUp
-    : trend === 'down'
-      ? TrendingDown
-      : Minus;
-
-  const trendColor = trend === 'up'
-    ? 'text-success'
-    : trend === 'down'
-      ? 'text-danger'
-      : 'text-gray-400';
-
-  const trendBg = trend === 'up'
-    ? 'bg-success/10'
-    : trend === 'down'
-      ? 'bg-danger/10'
-      : 'bg-gray-800';
+  const direction = !hasChange || changePercent === 0 ? 'flat' : changePercent > 0 ? 'up' : 'down';
+  const good = direction === 'flat' ? null : (direction === 'up') !== invert;
+  const TrendIcon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus;
 
   if (loading) {
     return (
-      <div
-        className={clsx(
-          'bg-gray-900 rounded-lg border border-gray-800 px-3 py-2',
-          className
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <div className="h-4 w-4 bg-gray-800 rounded animate-pulse flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="h-3 w-16 bg-gray-800 rounded animate-pulse mb-1" />
-            <div className="h-5 w-20 bg-gray-800 rounded animate-pulse" />
-          </div>
-          <div className="h-4 w-12 bg-gray-800 rounded animate-pulse" />
-        </div>
+      <div className={clsx('rounded-xl border border-gray-800 bg-gray-900 px-4 py-3', className)} data-testid="kpi-skeleton">
+        <div className="mb-2 h-3 w-20 animate-pulse rounded bg-gray-800" />
+        <div className="mb-3 h-6 w-24 animate-pulse rounded bg-gray-800" />
+        <div className="h-6 w-full animate-pulse rounded bg-gray-800" />
       </div>
     );
   }
 
-  return (
-    <div
+  /*
+   * The change sits on the line under the figure, beside what it compares
+   * against, so it reads as one statement: up 27% on the prior 365 days. In
+   * the top corner it crowded the label, and on a phone, where a tile is half
+   * the screen, "Revenue" was cut to "Reve...".
+   */
+  const badge = hasChange && (
+    <span
       className={clsx(
-        'bg-gray-900 rounded-lg border border-gray-800 px-3 py-2 card-hover',
-        className
+        'inline-flex flex-shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums',
+        good === true && 'bg-success/10 text-success',
+        good === false && 'bg-danger/10 text-danger',
+        good === null && 'bg-gray-800 text-gray-400',
       )}
     >
-      <div className="flex items-center gap-3">
-        {icon && (
-          <div className="p-1.5 bg-primary-500/10 rounded-md text-primary-500 flex-shrink-0">
-            {icon}
-          </div>
-        )}
-        <div className="flex-1">
-          <span className="text-xs font-medium text-gray-400 block">{label}</span>
-          <p className="text-lg font-bold text-white tabular-nums">
-            {formattedValue}
-          </p>
+      <TrendIcon className="h-3 w-3" aria-hidden="true" />
+      {formatChange(changePercent, changeUnit)}
+    </span>
+  );
+
+  return (
+    <div className={clsx('flex h-full min-w-0 flex-col rounded-xl border border-gray-800 bg-gray-900 px-4 py-3', className)}>
+      <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-gray-400">
+        {icon && <span className="flex-shrink-0 text-primary-500">{icon}</span>}
+        <span className="truncate">{label}</span>
+      </span>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-white tabular-nums">{formattedValue}</p>
+      {hasChange && (
+        <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+          {badge}
+          {comparison && <p className="min-w-0 truncate text-[11px] text-gray-500">{comparison}</p>}
         </div>
-        {hasChange && (
-          <span
-            className={clsx(
-              'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0',
-              trendBg,
-              trendColor
-            )}
-          >
-            <TrendIcon className="h-3 w-3" />
-            {formatPercent(Math.abs(changePercent))}
-          </span>
-        )}
-      </div>
+      )}
+      {caption && <p className="mt-0.5 truncate text-[11px] text-gray-500">{caption}</p>}
+      {trend && trend.length > 1 && (
+        <div className="mt-auto pt-2">
+          <Sparkline values={trend} height={28} label={`${label} trend`} />
+        </div>
+      )}
     </div>
   );
 }
@@ -147,12 +134,7 @@ interface KPIGridProps {
 
 export function KPIGrid({ children, className }: KPIGridProps) {
   return (
-    <div
-      className={clsx(
-        'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2',
-        className
-      )}
-    >
+    <div className={clsx('grid grid-cols-2 gap-3 lg:grid-cols-4', className)}>
       {children}
     </div>
   );
