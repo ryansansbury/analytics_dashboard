@@ -10,8 +10,7 @@ Chrome over its DevTools pipe. Nothing leaves the machine. Chrome is told
 the visitor prefers reduced motion, which the charts honour by drawing without animation, so every frame is settled.
 
 It writes
-    docs/screenshots/<page>.png            the README's pictures, a 1600 by 1000 window at 2x, light theme
-    docs/screenshots/executive-dark.png    the README hero in the dark theme
+    docs/screenshots/<page>.png            the README's pictures, a 1600 by 1000 window at 2x, all light so they match
     scripts/out/card-light.png             the portfolio card, 1600 by 1000, from a 1440 by 900 window
     scripts/out/card-dark.png              the same in the dark theme
     scripts/out/review/                    every page in both themes at desktop, tablet, and phone width, full length
@@ -357,9 +356,6 @@ def main():
             shoot(f"readme {page}", page, path, "light", README_SHOTS.joinpath(f"{page}.png"),
                   1600, 1000, 2, False, False)
         if not args.only or args.only == "executive":
-            shoot("readme executive dark", "executive", "/", "dark",
-                  README_SHOTS.joinpath("executive-dark.png"), 1600, 1000, 2, False, False)
-
             print("Portfolio card")
             for theme in ("light", "dark"):
                 shoot(f"card {theme}", "executive", "/", theme, OUT.joinpath(f"card-{theme}.png"),

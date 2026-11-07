@@ -14,10 +14,7 @@ No signup. Everything on screen came out of the code in this repository. The que
 ![scikit--learn](https://img.shields.io/badge/scikit--learn-1.5-F7931E?logo=scikitlearn&logoColor=white)
 ![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/executive-dark.png">
-  <img alt="The executive overview with four headline figures and their trends, revenue against the same period last year, revenue by category, a year of daily revenue as a calendar, and the open pipeline by stage" src="docs/screenshots/executive.png">
-</picture>
+![The executive overview with four headline figures and their trends, revenue against the same period last year, revenue by category, a year of daily revenue as a calendar, and the open pipeline by stage](docs/screenshots/executive.png)
 
 ## The five pages
 
