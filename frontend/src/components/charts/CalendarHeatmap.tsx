@@ -12,6 +12,7 @@ import type { CalendarDay } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { HeatLegend } from './CohortHeatmap';
 import { heatColor, heatStep, weekdayThresholds } from './heat';
+import { usePhone } from '../../hooks/useNarrow';
 
 const CELL = 12;
 const GAP = 2;
@@ -23,6 +24,10 @@ const WEEKDAY_LABELS: Record<number, string> = { 0: 'Mon', 2: 'Wed', 4: 'Fri' };
 export function CalendarHeatmap({ days }: { days: CalendarDay[] }) {
   const [hover, setHover] = useState<CalendarDay | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  // On a phone the year is drawn a size up and scrolls sideways from its
+  // newest end, with a little room past the last week so that end's month
+  // name shows whole.
+  const phone = usePhone();
 
   const { thresholds, weeks, months, best } = useMemo(() => {
     const weekCount = days.length ? days[days.length - 1].week + 1 : 0;
@@ -49,15 +54,15 @@ export function CalendarHeatmap({ days }: { days: CalendarDay[] }) {
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollLeft = el.scrollWidth;
-  }, [days.length]);
+  }, [days.length, phone]);
 
-  const width = LEFT + weeks * PITCH;
+  const width = LEFT + weeks * PITCH + (phone ? 16 : 0);
   const height = TOP + 7 * PITCH;
 
   return (
     <div className="flex h-full flex-col justify-center gap-3">
       <div ref={scroller} className="relative overflow-x-auto">
-        <div className="relative min-w-[620px]">
+        <div className={phone ? 'relative min-w-[880px]' : 'relative min-w-[620px]'}>
           <svg
             viewBox={`0 0 ${width} ${height}`}
             width="100%"

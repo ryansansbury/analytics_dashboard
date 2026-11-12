@@ -17,6 +17,7 @@ import {
 import { CHART_CHROME, getChartColor } from '../../utils/formatters';
 import { AXIS, Legend, TooltipBox } from './chrome';
 import { REDUCED_MOTION } from '../../utils/motion';
+import { useNarrow, usePhone } from '../../hooks/useNarrow';
 
 type ValueFormat = 'currency' | 'number' | 'percent';
 
@@ -101,8 +102,12 @@ export function AreaChart<T extends Record<string, unknown>>({
   const legendVisible = showLegend ?? yKeys.length >= 2;
   const formatValue = VALUE_FORMAT[formatY];
 
-  // Fewer tick labels when there are many points, so they never collide.
-  const xAxisInterval = data.length > 20 ? Math.ceil(data.length / 10) - 1 : 0;
+  // Fewer tick labels when there are many points, so they never collide. On a
+  // phone even a dozen weekly labels collide, so the axis keeps the first and
+  // the last and only the ones between that fit.
+  const narrow = useNarrow();
+  const phone = usePhone();
+  const xAxisInterval = narrow ? 'preserveStartEnd' : data.length > 20 ? Math.ceil(data.length / 10) - 1 : 0;
   const gradientId = (key: keyof T) => `area-${String(key).replace(/[^a-zA-Z0-9]/g, '')}`;
 
   const chart = (
@@ -124,7 +129,7 @@ export function AreaChart<T extends Record<string, unknown>>({
         <XAxis
           dataKey={String(xKey)}
           {...AXIS}
-          fontSize={10}
+          fontSize={phone ? 11 : 10}
           tickFormatter={(value) => formatX(String(value))}
           interval={xAxisInterval}
           minTickGap={8}

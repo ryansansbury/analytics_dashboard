@@ -20,6 +20,7 @@ import {
 import type { ComparisonPoint } from '../../types';
 import { CHART_CHROME, currencyAxisFormatter, formatChange, formatCurrency } from '../../utils/formatters';
 import { AXIS, Legend, TooltipBox } from './chrome';
+import { usePhone } from '../../hooks/useNarrow';
 
 const CURRENT = 'var(--color-chart-1)';
 const PREVIOUS = 'var(--color-ink-muted)';
@@ -34,6 +35,8 @@ interface ComparisonChartProps {
 export function ComparisonChart({ data, height = '100%', monthly = false }: ComparisonChartProps) {
   const tick = (label: string) => (monthly ? label.split(' ')[0] : label);
   const last = data.length - 1;
+  // The date labels a size up on a phone. The axis keeps only the ones that fit.
+  const phone = usePhone();
 
   const endLabel = (text: string, color: string) =>
     function EndLabel(props: { x?: number | string; y?: number | string; index?: number }) {
@@ -60,7 +63,7 @@ export function ComparisonChart({ data, height = '100%', monthly = false }: Comp
             <XAxis
               dataKey="label"
               {...AXIS}
-              fontSize={10}
+              fontSize={phone ? 11 : 10}
               tickFormatter={tick}
               interval="preserveStartEnd"
               minTickGap={10}

@@ -22,6 +22,7 @@ import {
 import type { SeasonalityPoint } from '../../types';
 import { CHART_CHROME, formatChange } from '../../utils/formatters';
 import { AXIS, Legend, TooltipBox } from './chrome';
+import { useNarrow, usePhone } from '../../hooks/useNarrow';
 
 const ABOVE = 'var(--color-chart-1)';
 const BELOW = 'var(--color-chart-2)';
@@ -29,6 +30,11 @@ const BELOW = 'var(--color-chart-2)';
 export function SeasonalityChart({ data, height = '100%' }: { data: SeasonalityPoint[]; height?: number | '100%' }) {
   const rows = data.map((d) => ({ month: d.month, deviation: Math.round((d.index - 1) * 1000) / 10 }));
   const extent = Math.max(10, ...rows.map((r) => Math.ceil(Math.abs(r.deviation) / 10) * 10));
+  // All twelve months stay named. A phone on its side has the room to draw them
+  // a size up, and an upright one keeps the desktop's size so no two touch.
+  const phone = usePhone();
+  const narrow = useNarrow();
+  const roomy = phone && !narrow;
 
   return (
     <div className="flex h-full flex-col gap-2">
@@ -42,7 +48,7 @@ export function SeasonalityChart({ data, height = '100%' }: { data: SeasonalityP
         <ResponsiveContainer width="100%" height={height}>
           <BarChart data={rows} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
             <CartesianGrid stroke={CHART_CHROME.grid} vertical={false} />
-            <XAxis dataKey="month" {...AXIS} fontSize={10} interval={0} />
+            <XAxis dataKey="month" {...AXIS} fontSize={roomy ? 11 : 10} interval={0} />
             <YAxis {...AXIS} width={44} domain={[-extent, extent]} tickFormatter={(v) => `${v > 0 ? '+' : ''}${v}%`} />
             <ReferenceLine y={0} stroke="var(--color-ink-muted)" />
             <Tooltip

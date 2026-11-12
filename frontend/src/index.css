@@ -407,3 +407,83 @@ html:not(.dark) .text-gray-200 {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------------------
+ * Phones and touch screens (11/11).
+ *
+ * Everything here reaches only a phone-sized window or a touch screen, so a
+ * desktop with a mouse looks and works exactly as it did. These rules are
+ * unlayered, so they win over the utility classes they adjust.
+ * ------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  /* The five page links share the width as a tab bar, each icon over its
+     name, so none sits past the screen's edge. */
+  .mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    overflow: visible;
+    padding: 6px 6px 8px;
+  }
+  .mobile-nav-link {
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 46px;
+    padding: 6px 2px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .mobile-nav-link svg {
+    width: 16px;
+    height: 16px;
+  }
+  /* A tile's name, comparison and caption wrap instead of cutting off. */
+  .kpi-change {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .kpi-label {
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+  }
+  .kpi-note {
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    font-size: 12px;
+  }
+  /* A table's cells wrap instead of cutting off, and the first column,
+     a name, gets more of the width unless the table sets its own. */
+  .dash-table td {
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    overflow-wrap: break-word;
+  }
+  .dash-table th:first-child {
+    width: 36%;
+  }
+  .mobile-top p,
+  .mobile-foot p {
+    font-size: 12px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  /* The small controls keep their size on screen and take a tap about 44px
+     tall around them. */
+  .tap-area {
+    position: relative;
+  }
+  .tap-area::after {
+    content: "";
+    position: absolute;
+    inset: -10px -2px;
+  }
+}

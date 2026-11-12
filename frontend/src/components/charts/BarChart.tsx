@@ -17,6 +17,7 @@ import {
 import { CHART_CHROME, getChartColor, getOrdinalColor } from '../../utils/formatters';
 import { AXIS, Legend, TooltipBox } from './chrome';
 import { REDUCED_MOTION } from '../../utils/motion';
+import { useNarrow, usePhone } from '../../hooks/useNarrow';
 
 type ValueFormat = 'currency' | 'number' | 'percent';
 
@@ -88,6 +89,17 @@ export function BarChart<T extends Record<string, unknown>>({
   const legendVisible = showLegend ?? yKeys.length >= 2;
   const formatValue = VALUE_FORMAT[formatY];
   const tickText = formatX ?? (formatXAsDate ? formatDateLabel : undefined);
+
+  /*
+   * A phone has no room for a row of labels across the bars. Category names,
+   * like the order-size bands, lean so every bar keeps its name, and dates
+   * thin out to the ones that fit. A wider window is unchanged.
+   */
+  const narrow = useNarrow();
+  const phone = usePhone();
+  const lean = narrow && !angledLabels && !horizontal && !tickText && data.length > 5;
+  const fitted = !formatXAsDate && data.length <= 12;
+  const xInterval = fitted && !(narrow && !lean) ? 0 : 'preserveStartEnd';
 
   const tooltip = (
     <Tooltip
@@ -164,11 +176,11 @@ export function BarChart<T extends Record<string, unknown>>({
       <XAxis
         dataKey={String(xKey)}
         {...AXIS}
-        fontSize={10}
-        angle={angledLabels ? -45 : 0}
-        textAnchor={angledLabels ? 'end' : 'middle'}
-        height={angledLabels ? 80 : 30}
-        interval={!formatXAsDate && data.length <= 12 ? 0 : 'preserveStartEnd'}
+        fontSize={phone ? 11 : 10}
+        angle={angledLabels ? -45 : lean ? -35 : 0}
+        textAnchor={angledLabels || lean ? 'end' : 'middle'}
+        height={angledLabels ? 80 : lean ? 56 : 30}
+        interval={xInterval}
         minTickGap={6}
         tickFormatter={tickText}
       />

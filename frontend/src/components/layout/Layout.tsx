@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import clsx from 'clsx';
-import { MobileNav, Sidebar } from './Sidebar';
+import { MobileFooter, MobileNav, Sidebar } from './Sidebar';
 
 export function Layout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -16,6 +16,7 @@ export function Layout() {
         <main>
           <Outlet />
         </main>
+        <MobileFooter />
       </div>
     </div>
   );

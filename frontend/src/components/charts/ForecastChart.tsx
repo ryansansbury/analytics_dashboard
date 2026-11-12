@@ -22,6 +22,7 @@ import {
 import type { ForecastPoint } from '../../types';
 import { CHART_CHROME, currencyAxisFormatter, formatCurrency, formatMonthYear } from '../../utils/formatters';
 import { AXIS, Legend, TooltipBox } from './chrome';
+import { usePhone } from '../../hooks/useNarrow';
 
 const ACTUAL = 'var(--color-chart-1)';
 // The forecast continues the actual series, so it keeps its colour and changes
@@ -31,6 +32,8 @@ const BACKTEST = 'var(--color-chart-2)';
 
 export function ForecastChart({ data, height = '100%' }: { data: ForecastPoint[]; height?: number | '100%' }) {
   const hasBacktest = data.some((d) => d.backtest != null);
+  // The month labels a size up on a phone. The axis keeps only the ones that fit.
+  const phone = usePhone();
 
   return (
     <div className="flex h-full flex-col gap-2">
@@ -50,7 +53,7 @@ export function ForecastChart({ data, height = '100%' }: { data: ForecastPoint[]
             <XAxis
               dataKey="date"
               {...AXIS}
-              fontSize={10}
+              fontSize={phone ? 11 : 10}
               tickFormatter={(v) => formatMonthYear(String(v), true)}
               interval="preserveStartEnd"
               minTickGap={12}

@@ -91,7 +91,7 @@ export function DataTable<T extends Record<string, unknown>>({
 
   return (
     <div className={clsx('h-full overflow-auto', className)}>
-      <table className="w-full" style={{ tableLayout: 'fixed' }}>
+      <table className="dash-table w-full" style={{ tableLayout: 'fixed' }}>
         <thead className="sticky top-0 bg-gray-900 z-10">
           <tr className="border-b border-gray-800">
             {columns.map((column) => (

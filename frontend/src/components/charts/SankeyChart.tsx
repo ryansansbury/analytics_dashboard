@@ -15,6 +15,7 @@ import { ResponsiveContainer, Sankey, Tooltip } from 'recharts';
 import type { PipelineFlow } from '../../types';
 import { formatCurrency, getOrdinalColor } from '../../utils/formatters';
 import { TooltipBox } from './chrome';
+import { usePhone } from '../../hooks/useNarrow';
 
 const OUTCOME_COLORS: Record<string, string> = {
   Won: 'var(--color-status-good)',
@@ -50,6 +51,8 @@ interface LinkProps {
 export function SankeyChart({ flow, height = '100%' }: { flow: PipelineFlow; height?: number | '100%' }) {
   const names = flow.nodes.map((n) => n.name);
   const amounts = new Map(flow.links.map((l) => [`${l.source}-${l.target}`, l.amount]));
+  // Each stage's deal count a size up on a phone.
+  const phone = usePhone();
 
   const renderNode = (props: NodeProps) => {
     const { x, y, width, height: h, index, payload } = props;
@@ -77,7 +80,7 @@ export function SankeyChart({ flow, height = '100%' }: { flow: PipelineFlow; hei
           x={labelX}
           y={y + h / 2}
           dy={12}
-          fontSize={10}
+          fontSize={phone ? 11 : 10}
           fill="var(--color-ink-muted)"
           stroke="var(--color-surface)"
           strokeWidth={3}

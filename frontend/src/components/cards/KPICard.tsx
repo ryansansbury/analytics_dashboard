@@ -108,16 +108,18 @@ export function KPICard({
     <div className={clsx('flex h-full min-w-0 flex-col rounded-xl border border-gray-800 bg-gray-900 px-4 py-3', className)}>
       <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-gray-400">
         {icon && <span className="flex-shrink-0 text-primary-500">{icon}</span>}
-        <span className="truncate">{label}</span>
+        <span className="kpi-label truncate">{label}</span>
       </span>
       <p className="mt-1 text-2xl font-semibold tracking-tight text-white tabular-nums">{formattedValue}</p>
+      {/* On a phone, where a tile is half the screen, the comparison and the
+        * caption wrap instead of cutting off (kpi-change in index.css). */}
       {hasChange && (
-        <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+        <div className="kpi-change mt-0.5 flex min-w-0 items-center gap-1.5">
           {badge}
-          {comparison && <p className="min-w-0 truncate text-[11px] text-gray-500">{comparison}</p>}
+          {comparison && <p className="kpi-note min-w-0 truncate text-[11px] text-gray-500">{comparison}</p>}
         </div>
       )}
-      {caption && <p className="mt-0.5 truncate text-[11px] text-gray-500">{caption}</p>}
+      {caption && <p className="kpi-note mt-0.5 truncate text-[11px] text-gray-500">{caption}</p>}
       {trend && trend.length > 1 && (
         <div className="mt-auto pt-2">
           <Sparkline values={trend} height={28} label={`${label} trend`} />

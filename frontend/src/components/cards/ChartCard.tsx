@@ -138,7 +138,7 @@ function ViewButton({
       aria-label={label}
       title={label}
       className={clsx(
-        'rounded p-1 transition-colors',
+        'tap-area rounded p-1 transition-colors',
         active ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white',
       )}
     >

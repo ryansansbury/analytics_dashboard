@@ -127,15 +127,19 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   );
 }
 
-/** The page links for narrow screens, where the sidebar would take half the width. */
+/**
+ * The page links for narrow screens, where the sidebar would take half the width.
+ * On a phone the five links share the width as a tab bar, each icon over its
+ * name, so none sits past the edge (mobile-nav in index.css).
+ */
 export function MobileNav() {
   return (
-    <div className="border-b border-gray-800 bg-gray-900 lg:hidden">
+    <div className="mobile-top border-b border-gray-800 bg-gray-900 lg:hidden">
       <div className="flex items-center justify-between px-4 pt-3">
         <Brand />
         <DataNote />
       </div>
-      <nav className="flex gap-1 overflow-x-auto px-3 py-2" aria-label="Pages">
+      <nav className="mobile-nav flex gap-1 overflow-x-auto px-3 py-2" aria-label="Pages">
         {navigation.map((item) => (
           <NavLink
             key={item.name}
@@ -143,7 +147,7 @@ export function MobileNav() {
             end={item.href === '/'}
             className={({ isActive }) =>
               clsx(
-                'flex flex-shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium',
+                'mobile-nav-link flex flex-shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium',
                 isActive ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white',
               )
             }
@@ -154,5 +158,18 @@ export function MobileNav() {
         ))}
       </nav>
     </div>
+  );
+}
+
+/** The data note and the source link at the foot of the page on narrow screens, which have no sidebar to hold them. */
+export function MobileFooter() {
+  return (
+    <footer className="mobile-foot flex items-center justify-between gap-4 border-t border-gray-800 px-4 py-4 lg:hidden">
+      <DataNote />
+      <a href={SOURCE_URL} className="tap-area inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white">
+        <Github className="h-3.5 w-3.5" />
+        Source on GitHub
+      </a>
+    </footer>
   );
 }

@@ -77,7 +77,7 @@ export function Header({ title, subtitle }: HeaderProps) {
                 aria-pressed={preset === p.value}
                 title={p.label}
                 className={clsx(
-                  'rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                  'tap-area rounded-md px-2 py-1 text-xs font-medium transition-colors',
                   preset === p.value
                     ? 'bg-primary-600 text-white'
                     : 'text-gray-400 hover:bg-gray-700 hover:text-white',
@@ -93,14 +93,14 @@ export function Header({ title, subtitle }: HeaderProps) {
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white disabled:opacity-50"
+              className="tap-area rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white disabled:opacity-50"
               aria-label="Refresh data"
             >
               <RefreshCw className={clsx('h-4 w-4', isRefreshing && 'animate-spin')} />
             </button>
             <button
               onClick={toggleDarkMode}
-              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
+              className="tap-area rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
               aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
