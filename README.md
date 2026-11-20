@@ -18,7 +18,7 @@ No signup. Everything on screen came out of the code in this repository. The que
 
 ## The five pages
 
-**Executive.** Four headline figures with their trend and their change on the prior period of equal length. Revenue sits against the same weeks or months a year earlier. A quarter-end spike lines up with last year's, and the gap between the lines is growth. A calendar of every day's revenue for a year shows the quiet weekends, the quarter-end pushes, and the year's growth at a glance.
+**Executive.** Four headline figures with their trend and their change on the prior period of equal length. Revenue sits against the same weeks or months a year earlier. A quarter-end spike lines up with last year's and the gap between the lines is growth. A calendar of every day's revenue for a year shows the quiet weekends, the quarter-end pushes, and the year's growth at a glance.
 
 **Revenue.** The category mix as a stacked area over time, sales channels as ranked bars, and each region as a small multiple on a shared scale with its change on a year earlier. Order sizes compare each band's share of orders with its share of revenue.
 
@@ -36,7 +36,7 @@ No signup. Everything on screen came out of the code in this repository. The que
 
 ![Forecasting](docs/screenshots/forecasting.png)
 
-Every chart has a table view with a CSV download, and the whole interface works on a phone.
+Every chart has a table view with a CSV download and the whole interface works on a phone.
 
 ## The models
 
@@ -47,19 +47,19 @@ Two of them. Each is measured on data it never trained on.
 | `GradientBoostingClassifier` | Will a live customer go 90 days without an order | Features frozen at a cutoff 90 days back and labeled by what happened after it, then a stratified holdout | **0.78 ROC AUC** against a base rate of 19% |
 | `Ridge` on engineered time features | Monthly revenue six months ahead | Chronological holdout of the last five months | **6.0% MAPE** against 22.0% for repeating last month |
 
-The churn model answers a question someone could act on. Every feature is computed from the transactions on or before a cutoff date, and the label is whether the customer bought anything in the 90 days after it. Nothing from after the cutoff can reach a feature, and a test enforces that.
+The churn model answers a question someone could act on. Every feature is computed from the transactions on or before a cutoff date and the label is whether the customer bought anything in the 90 days after it. Nothing from after the cutoff can reach a feature and a test enforces that.
 
 An earlier version trained on the customer's status column instead. That taught it to recognize customers who had already left. Recency alone does that almost perfectly. It scored 0.96 ROC AUC and then rated nearly every live customer under 10% because none of them looked like the customers who were gone. A lower number from a model asking the right question is the better model.
 
 The forecast is validated chronologically and never on a shuffled split. Shuffling lets a time-series model train on the future to predict the past. Its features are a trend, a yearly cycle, a flag for the quarter-end months, and two lags. The quarter-end flag earns its place because deals pulled into March, June, September, and December are a real B2B pattern that a smooth yearly curve can't draw. MAPE on its own says little. The API reports it beside the error of two naive baselines and the page draws the backtest over the actuals.
 
-`/api/forecasting/model-performance` returns the exact numbers above, and `backend/tests/test_forecasting_api.py` asserts the endpoint matches the trained model rather than deriving anything.
+`/api/forecasting/model-performance` returns the exact numbers above and `backend/tests/test_forecasting_api.py` asserts the endpoint matches the trained model rather than deriving anything.
 
 ## How the charts are built
 
-Each chart's form follows the question it answers. Ranked bars replaced every pie and donut because lengths along a shared baseline can be compared and angles can't. Regions are small multiples on one scale instead of five tangled lines, and cohort retention is a triangle of shaded cells where months a cohort hasn't reached are empty rather than zero.
+Each chart's form follows the question it answers. Ranked bars replaced every pie and donut because lengths along a shared baseline can be compared and angles can't. Regions are small multiples on one scale instead of five tangled lines and cohort retention is a triangle of shaded cells where months a cohort hasn't reached are empty rather than zero.
 
-Color follows the entity and never its rank. A category keeps its color when a filter reorders the categories, and anything past eight series folds into Other in a muted gray. The categorical palette and the sequential heatmap ramp were each checked with a validator for separation under color vision deficiency, lightness steps, and contrast against both the light and the dark surface. Text and values wear text colors and a pale series color never carries a number.
+Color follows the entity and never its rank. A category keeps its color when a filter reorders the categories and anything past eight series folds into Other in a muted gray. The categorical palette and the sequential heatmap ramp were each checked with a validator for separation under color vision deficiency, lightness steps, and contrast against both the light and the dark surface. Text and values wear text colors and a pale series color never carries a number.
 
 Charts draw without animation when the visitor's system asks for reduced motion.
 
@@ -67,7 +67,7 @@ Charts draw without animation when the visitor's system asks for reduced motion.
 
 **Numbers are measured and never generated.** This application used to report model accuracy and churn scores from `random.uniform()`. All of it comes from trained models now. Where a figure can't be derived the API returns `null` and the page renders a dash. A null change means there is no prior period to compare against and not that the change was zero.
 
-**A partly covered time bucket is not plotted.** Nine days of a month beside twelve finished ones reads as a collapse rather than as a month that isn't over, and a window that opens on a Thursday would start with a three-day week that reads as a dip. The newer endpoints trim both ends of a window to whole buckets with the rule in `backend/app/analytics.py`. The original trend endpoint trims its unfinished last bucket with the rule in `backend/app/periods.py`.
+**A partly covered time bucket is not plotted.** Nine days of a month beside twelve finished ones reads as a collapse rather than as a month that isn't over. A window that opens on a Thursday would start with a three-day week that reads as a dip. The newer endpoints trim both ends of a window to whole buckets with the rule in `backend/app/analytics.py`. The original trend endpoint trims its unfinished last bucket with the rule in `backend/app/periods.py`.
 
 ## The hosted demo is a static build
 
@@ -90,7 +90,7 @@ The demo lives at `/analytics-dashboard/` on the website beside the site's other
 
 The coverage test runs before anything is staged. A snapshot missing an endpoint stops the release instead of reaching production as a blank chart. The script pins its own database rather than reading an ambient `DATABASE_URL` because inheriting one points a reseed at whatever project exported it.
 
-Every number in the demo came out of the real pipeline. The demo's clock is frozen at the date the snapshot was taken and the sidebar says so, and the presets resolve against that date so they never ask for a window the snapshot doesn't hold.
+Every number in the demo came out of the real pipeline. The demo's clock is frozen at the date the snapshot was taken and the sidebar says so. The presets resolve against that date so they never ask for a window the snapshot doesn't hold.
 
 `scripts/screenshots.py` opens the built demo in headless Chrome and takes the README's pictures and a review set of every page in both themes at desktop, tablet, and phone widths. It fails on a console error, a failed request, a page wider than its window, or a card that drew nothing.
 
@@ -100,7 +100,7 @@ Every number in the demo came out of the real pipeline. The demo's clock is froz
 ./scripts/check.sh     # everything CI runs, against a local test database
 ```
 
-That runs 187 backend tests and 218 frontend tests plus lint and a type-checked build. CI runs the same on every push with a gitleaks scan, and the backend job starts its own PostgreSQL service so the cross-endpoint consistency suite runs there instead of skipping.
+That runs 187 backend tests and 218 frontend tests plus lint and a type-checked build. CI runs the same on every push with a gitleaks scan and the backend job starts its own PostgreSQL service so the cross-endpoint consistency suite runs there instead of skipping.
 
 The frontend suite includes a coverage check that mounts every page under every preset and serves `fetch` from the snapshot directory. A request the snapshot doesn't cover fails a test rather than producing a blank chart.
 
@@ -152,6 +152,8 @@ cp -r dist/* ../backend/static/
 
 Flask then serves the API and the compiled interface from one origin with SPA fallback. `backend/static/` is gitignored because it is build output.
 
+With `FLASK_ENV=production` the app refuses to start until `SECRET_KEY` and `DATABASE_URL` are set. Every response carries a content security policy that allows the page's own files and nothing else. No other origin can read the API unless `CORS_ORIGINS` names it.
+
 ## API
 
 35 endpoints across five blueprints. All are GET and all return JSON. The full reference with parameters and response shapes is in [`docs/API.md`](docs/API.md).
@@ -198,7 +200,7 @@ Seven tables hold products, customers, sales reps, transactions, pipeline opport
 
 The generator builds in the patterns a real business has so the charts have something true to show. Revenue grows about 27% a year with a December peak, a late-summer lull, and a push in the last ten days of every quarter. Weekends are quiet. Asia Pacific and the cloud and data categories grow faster than the rest, online orders gain share, and each rep's quota is set from their own trailing year so attainment spreads around target. Each opportunity walks through the stages with its own timing. That is what makes win rate and cycle time measurable.
 
-Churn is driven by behavior instead of assigned at random. A latent engagement variable drives order frequency and the churn hazard together, and accounts at risk fade out over their last six months rather than stopping dead. `backend/scripts/inspect_seed.py` prints the dataset's shape without a database.
+Churn is driven by behavior instead of assigned at random. A latent engagement variable drives order frequency and the churn hazard together. Accounts at risk fade out over their last six months rather than stopping dead. `backend/scripts/inspect_seed.py` prints the dataset's shape without a database.
 
 The generator is deterministic but anchors its window to today minus two years. A rerun reproduces the same dataset re-dated rather than a different one.
 
@@ -206,9 +208,14 @@ The generator is deterministic but anchors its window to today minus two years. 
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | local Postgres | Connection string |
+| `DATABASE_URL` | local Postgres | Connection string. Production won't start without it |
 | `FLASK_ENV` | `development` | Selects the config class |
-| `SECRET_KEY` | dev placeholder | Set a real value in production |
+| `SECRET_KEY` | dev placeholder | Production won't start without a real one |
+| `HOST` | `127.0.0.1` | Where `run.py` listens. The dev server stays on this machine |
+| `PORT` | `5001` | The port `run.py` listens on |
+| `FLASK_DEBUG` | unset | `1` turns on the debugger for local work |
+| `CORS_ORIGINS` | none | Other origins allowed to read the API, comma-separated |
+| `PROXY_HOPS` | `0` | Proxies in front whose forwarded headers are trusted |
 | `TEST_DATABASE_URL` | `..._test` | Tests only. Must end in `_test` |
 | `VITE_API_URL` | `/api` | API base. Unset uses the dev proxy |
 | `VITE_STATIC_DATA` | unset | `true` builds the static demo |
@@ -222,4 +229,4 @@ The generator is deterministic but anchors its window to today minus two years. 
 
 ## License
 
-The code is under the [PolyForm Noncommercial License 1.0.0](LICENSE). You're welcome to read it, run it, and change it for personal, educational, research, or other noncommercial use, and commercial use isn't permitted.
+The code is under the [PolyForm Noncommercial License 1.0.0](LICENSE). You're welcome to read it, run it, and change it for personal, educational, research, or other noncommercial use. Commercial use isn't permitted.

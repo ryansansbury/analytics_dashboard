@@ -358,7 +358,7 @@ def get_pipeline_forecast():
 @bp.route('/churn-risk')
 def get_churn_risk():
     """Get customers at risk of churning."""
-    limit = request.args.get('limit', 10, type=int)
+    limit = analytics.int_arg(request.args, 'limit', 10, 1, 100)
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 

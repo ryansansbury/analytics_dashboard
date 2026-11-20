@@ -93,10 +93,15 @@ class TestCustomerFrame:
         assert (customers_frame["spend_trend"] >= 0).all()
 
     def test_churned_customers_are_less_recent(self, customers_frame):
-        """The core signal. If this inverts, the generator or the join broke."""
+        """The core signal. If this inverts, the generator or the join broke.
+
+        Across a year of fixture end dates the churned median ran from 1.9 to
+        4.4 times the retained one. The bar is 1.5 times so the test fails on a
+        broken signal and never on the calendar.
+        """
         churned = customers_frame[customers_frame["churned"] == 1]["recency_days"].median()
         retained = customers_frame[customers_frame["churned"] == 0]["recency_days"].median()
-        assert churned > retained * 2, f"churned={churned} retained={retained}"
+        assert churned > retained * 1.5, f"churned={churned} retained={retained}"
 
     def test_latent_generator_fields_are_not_persisted(self, customers_frame):
         """`engagement` and `churn_date` drive the label. If either reached the

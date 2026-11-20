@@ -32,7 +32,9 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:5001',
+        // The compose file names the backend's container here. Everywhere
+        // else Flask is on this machine.
+        target: process.env.API_PROXY_TARGET ?? 'http://localhost:5001',
         changeOrigin: true,
       },
     },

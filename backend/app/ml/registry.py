@@ -22,6 +22,11 @@ from .features import churn_training_frame, monthly_revenue
 log = logging.getLogger(__name__)
 
 _lock = threading.Lock()
+#: What a caller is told when training failed for a reason that isn't the model's
+#: own refusal. A database error's text can hold the connection address and the
+#: query, so the detail goes to the log.
+FAILED = "the model could not be trained"
+
 _churn_model = None
 _churn_error: str | None = None
 _revenue_forecast = None
@@ -35,16 +40,23 @@ def _train_all() -> None:
     try:
         _churn_model = churn_mod.train(churn_training_frame())
         _churn_error = None
-    except Exception as exc:  # noqa: BLE001 - surfaced to the caller verbatim
+    except ValueError as exc:
+        # The model's own refusal (too few rows, one class). Safe to show.
         _churn_model, _churn_error = None, str(exc)
         log.warning("churn model unavailable: %s", exc)
+    except Exception:  # noqa: BLE001 - logged in full, answered in general
+        _churn_model, _churn_error = None, FAILED
+        log.exception("churn model could not train")
 
     try:
         _revenue_forecast = revenue_mod.train(monthly_revenue())
         _revenue_error = None
-    except Exception as exc:  # noqa: BLE001
+    except ValueError as exc:
         _revenue_forecast, _revenue_error = None, str(exc)
         log.warning("revenue model unavailable: %s", exc)
+    except Exception:  # noqa: BLE001
+        _revenue_forecast, _revenue_error = None, FAILED
+        log.exception("revenue model could not train")
 
     _trained = True
 

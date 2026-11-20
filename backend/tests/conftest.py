@@ -51,6 +51,25 @@ def app(tmp_path_factory):
     return application
 
 
+def _fixture_end() -> datetime:
+    """The day the fixture's history ends: today, or the day named in ANALYTICS_TEST_END_DATE.
+
+    The generator builds two years of history that end on this day, so the data
+    a test sees shifts with the calendar. A failure that shows up on one date
+    and not the next is reproduced by naming that date:
+
+        ANALYTICS_TEST_END_DATE=2026-11-19 pytest tests/test_models.py
+
+    The override is for the tests that read the tables alone (the models and
+    the feature frames). An endpoint that defaults its window to the clock
+    still reads today's date.
+    """
+    named = os.getenv("ANALYTICS_TEST_END_DATE")
+    if named:
+        return datetime.strptime(named, "%Y-%m-%d").replace(hour=12)
+    return datetime.now()
+
+
 def _seed() -> None:
     import importlib.util
 
@@ -61,8 +80,9 @@ def _seed() -> None:
     seed = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(seed)
 
-    seed.START_DATE = datetime.now() - timedelta(days=730)
-    seed.END_DATE = datetime.now()
+    end = _fixture_end()
+    seed.START_DATE = end - timedelta(days=730)
+    seed.END_DATE = end
     seed.NUM_CUSTOMERS = TEST_CUSTOMERS
     seed.NUM_TRANSACTIONS = TEST_TRANSACTIONS
 

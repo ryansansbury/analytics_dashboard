@@ -1,7 +1,8 @@
 # API Reference
 
 All endpoints are **HTTP GET**, return **JSON**, and require **no authentication**.
-CORS is open for `/api/*`. The base path is `/api`. In production the API is
+No other origin can read `/api/*` from a browser unless `CORS_ORIGINS` names
+it. The base path is `/api`. In production the API is
 same-origin with the frontend; in development the Vite server proxies `/api` to
 Flask on port 5001.
 
@@ -9,6 +10,9 @@ Flask on port 5001.
 
 - `start_date` and `end_date` are `YYYY-MM-DD`. Defaults are computed
   server-side from the current date and differ per endpoint, noted below.
+- A `start_date` or `end_date` that isn't a date, falls outside 2000 to 2100,
+  or opens a window longer than 3,660 days gets a `400` with an `error` field.
+- `limit` is held between 1 and 100.
 - Revenue aggregations count only `Transaction.status == 'completed'`.
 - Response fields are **camelCase**, converted from snake_case columns.
 - **Every figure is derived from stored rows or from a trained model.** Where a

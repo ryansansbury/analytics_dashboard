@@ -21,10 +21,23 @@ class TestChurnModel:
         assert m.n_train + m.n_test == len(customers_frame)
         assert m.n_test > 0 and m.n_train > m.n_test
 
-    def test_beats_random(self, churn_model):
+    def test_beats_random(self, customers_frame):
         """A model at 0.5 AUC has learned nothing. This is the floor that the
-        previous formula-plus-noise implementation could not have cleared."""
-        assert churn_model.metrics.roc_auc > 0.7
+        previous formula-plus-noise implementation could not have cleared.
+
+        The score comes from five folds over the whole fixture table. The
+        fixture's history ends on the day the tests run, so its data shifts
+        with the calendar. One holdout of it is about 125 rows with 20 churners
+        among them. Across a year of end dates that holdout's AUC ran from 0.51
+        to 0.85 while the five-fold figure stayed between 0.65 and 0.80. A floor
+        of 0.6 sits three standard errors above chance on this many rows.
+        """
+        assert churn_mod.cross_validated_auc(customers_frame) > 0.6
+
+    def test_cross_validated_score_is_deterministic(self, customers_frame):
+        a = churn_mod.cross_validated_auc(customers_frame)
+        assert a == churn_mod.cross_validated_auc(customers_frame)
+        assert 0.0 <= a <= 1.0
 
     def test_metrics_are_in_valid_ranges(self, churn_model):
         m = churn_model.metrics

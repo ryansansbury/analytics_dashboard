@@ -26,7 +26,7 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, cross_val_predict, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -78,6 +78,23 @@ def _build_pipeline() -> Pipeline:
         random_state=RANDOM_STATE,
     )
     return Pipeline([("pre", pre), ("clf", clf)])
+
+
+def cross_validated_auc(frame: pd.DataFrame, folds: int = 5) -> float:
+    """ROC AUC with every row held out once.
+
+    A quarter of a small table holds a few dozen churners, so one holdout's AUC
+    moves by several points from one draw of the data to the next. Scoring each
+    row with a model that never saw it makes the whole table the test set. That
+    figure is steady enough to hold a floor against.
+    """
+    features = frame[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
+    labels = frame["churned"].to_numpy()
+    splitter = StratifiedKFold(n_splits=folds, shuffle=True, random_state=RANDOM_STATE)
+    proba = cross_val_predict(
+        _build_pipeline(), features, labels, cv=splitter, method="predict_proba"
+    )[:, 1]
+    return round(float(roc_auc_score(labels, proba)), 4)
 
 
 class ChurnModel:

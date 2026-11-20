@@ -1,14 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  DollarSign,
-  Users,
-  Workflow,
-  TrendingUp,
-  ChevronLeft,
-  ChevronRight,
-  Github,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, DollarSign, Github, Globe, LayoutDashboard, TrendingUp, Users, Workflow } from 'lucide-react';
 import clsx from 'clsx';
 import { IS_STATIC, getManifest } from '../../services/staticData';
 import { formatDate } from '../../utils/formatters';
@@ -28,6 +19,8 @@ const navigation: NavItem[] = [
 ];
 
 const SOURCE_URL = 'https://github.com/ryansansbury/analytics_dashboard';
+/** The site this demo belongs to, so a visitor who lands here from a shared link can find the rest. */
+const HOME_URL = 'https://www.ryansansbury.com/';
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -121,6 +114,13 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             <Github className="h-3.5 w-3.5" />
             Source on GitHub
           </a>
+          <a
+            href={HOME_URL}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white"
+          >
+            <Globe className="h-3.5 w-3.5" />
+            ryansansbury.com
+          </a>
         </div>
       )}
     </aside>
@@ -166,10 +166,16 @@ export function MobileFooter() {
   return (
     <footer className="mobile-foot flex items-center justify-between gap-4 border-t border-gray-800 px-4 py-4 lg:hidden">
       <DataNote />
-      <a href={SOURCE_URL} className="tap-area inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white">
-        <Github className="h-3.5 w-3.5" />
-        Source on GitHub
-      </a>
+      <span className="flex items-center gap-4">
+        <a href={HOME_URL} className="tap-area inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white">
+          <Globe className="h-3.5 w-3.5" />
+          ryansansbury.com
+        </a>
+        <a href={SOURCE_URL} className="tap-area inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white">
+          <Github className="h-3.5 w-3.5" />
+          Source on GitHub
+        </a>
+      </span>
     </footer>
   );
 }

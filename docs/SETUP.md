@@ -96,7 +96,12 @@ destroys the data in it and every test still passes.
 |---|---|---|
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/analytics_dashboard` | Connection string. `postgres://` is rewritten to `postgresql://` for SQLAlchemy 2. |
 | `FLASK_ENV` | `development` | Selects the config class. |
-| `SECRET_KEY` | dev placeholder | Set a real value in production. |
+| `SECRET_KEY` | dev placeholder | Production refuses to start on the placeholder or without `DATABASE_URL`. |
+| `HOST` | `127.0.0.1` | Where `run.py` listens. The dev server stays on this machine unless this says otherwise. |
+| `PORT` | `5001` | The port `run.py` listens on. |
+| `FLASK_DEBUG` | unset | `1` turns on the debugger and the reloader for local work. |
+| `CORS_ORIGINS` | none | Other origins allowed to read the API from a browser, comma-separated. |
+| `PROXY_HOPS` | `0` | How many proxies in front have their `X-Forwarded` headers trusted. |
 | `TEST_DATABASE_URL` | `...analytics_dashboard_test` | Tests only. Must end in `_test`. |
 
 ### Frontend

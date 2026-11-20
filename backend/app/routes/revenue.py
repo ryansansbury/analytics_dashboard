@@ -192,7 +192,7 @@ def get_top_products():
     """Get top products by revenue."""
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    limit = request.args.get('limit', 10, type=int)
+    limit = analytics.int_arg(request.args, 'limit', 10, 1, 100)
 
     if not start_date:
         start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')

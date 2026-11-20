@@ -193,7 +193,7 @@ def get_cycle_time():
 def get_opportunities():
     """Get pipeline opportunities."""
     stage = request.args.get('stage')
-    limit = request.args.get('limit', 20, type=int)
+    limit = analytics.int_arg(request.args, 'limit', 20, 1, 100)
 
     query = db.session.query(Pipeline)
 

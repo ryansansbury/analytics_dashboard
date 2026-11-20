@@ -1,0 +1,16 @@
+# Kept out of every image built from this folder: local settings, the host's
+# own packages, build output, and history.
+.git
+.github
+**/.env
+**/.env.*
+**/venv
+**/.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/dist
+**/*.log
+**/*.db
+backend/static
+docs

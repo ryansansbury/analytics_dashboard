@@ -31,6 +31,41 @@ RISK_THRESHOLD = 0.5
 # --------------------------------------------------------------------------- windows and buckets
 
 
+#: The longest window a request may ask for. The generator writes two years.
+MAX_WINDOW_DAYS = 3660
+#: Years a request's dates may fall in. Date arithmetic near year 1 or 9999 overflows.
+YEARS = (2000, 2100)
+
+
+def query_problem(args):
+    """Why a request's dates can't be served, or None when they can.
+
+    Checked once before every API view. A date that isn't a date used to reach
+    `strptime` in the views and come back as a 500. A window of two thousand
+    years used to be honored one daily bucket at a time.
+    """
+    dates = {}
+    for name in ('start_date', 'end_date'):
+        raw = args.get(name)
+        if not raw:
+            continue
+        parsed = _parse_date(raw)
+        if parsed is None:
+            return f'{name} must be a date written YYYY-MM-DD'
+        if not YEARS[0] <= parsed.year <= YEARS[1]:
+            return f'{name} must fall between {YEARS[0]} and {YEARS[1]}'
+        dates[name] = parsed
+    start, end = dates.get('start_date'), dates.get('end_date') or date.today()
+    if start and abs((end - start).days) > MAX_WINDOW_DAYS:
+        return f'the window can be at most {MAX_WINDOW_DAYS} days long'
+    return None
+
+
+def int_arg(args, name: str, default: int, low: int, high: int) -> int:
+    """A whole-number parameter held between low and high. Anything unreadable is the default."""
+    return max(low, min(args.get(name, default, type=int), high))
+
+
 def parse_window(args, default_days: int = 90):
     """(start, end, granularity) from request args, with safe defaults."""
     end = _parse_date(args.get('end_date')) or date.today()
