@@ -11,19 +11,6 @@
 `./scripts/setup-local.sh` checks for all three, creates the database, and
 installs both halves' dependencies.
 
-## Docker
-
-```bash
-docker compose up
-```
-
-Brings up PostgreSQL and the Flask service. Seed it once the database is
-accepting connections:
-
-```bash
-docker compose exec backend python reseed.py
-```
-
 ## Local
 
 ### Backend

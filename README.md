@@ -44,8 +44,8 @@ Two of them. Each is measured on data it never trained on.
 
 | Model | Task | Validation | Result |
 |---|---|---|---|
-| `GradientBoostingClassifier` | Will a live customer go 90 days without an order | Features frozen at a cutoff 90 days back and labeled by what happened after it, then a stratified holdout | **0.78 ROC AUC** against a base rate of 19% |
-| `Ridge` on engineered time features | Monthly revenue six months ahead | Chronological holdout of the last five months | **6.0% MAPE** against 22.0% for repeating last month |
+| `GradientBoostingClassifier` | Will a live customer go 90 days without an order | Features frozen at a cutoff 90 days back and labeled by what happened after it, then a stratified holdout | **0.81 ROC AUC** against a base rate of 17% |
+| `Ridge` on engineered time features | Monthly revenue six months ahead | Chronological holdout of the last five months | **3.9% MAPE** against 20.2% for repeating last month |
 
 The churn model answers a question someone could act on. Every feature is computed from the transactions on or before a cutoff date and the label is whether the customer bought anything in the 90 days after it. Nothing from after the cutoff can reach a feature and a test enforces that.
 
@@ -140,8 +140,6 @@ npm run dev                    # http://localhost:3000
 Port 5001 rather than 5000 because AirPlay Receiver holds 5000 on macOS. The dev server proxies `/api` to Flask. Both halves share an origin and no CORS setup is needed.
 
 Check it came up with `curl -s localhost:5001/api/health`. It reports row counts and the data's age. Every other endpoint returns 200 with empty results against an empty database. That is correct and looks exactly like a broken deployment.
-
-Docker works too with `docker compose up` and then `docker compose exec backend python reseed.py` once Postgres is accepting connections.
 
 ### Production
 

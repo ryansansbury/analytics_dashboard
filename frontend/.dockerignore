@@ -1,7 +1,0 @@
-# Kept out of the image: local settings, the host's own packages, and build output.
-.env
-.env.*
-node_modules
-dist
-coverage
-*.log
