@@ -213,7 +213,7 @@ export function Operations() {
               </div>
               <p className="text-[11px] leading-relaxed text-gray-500">
                 Each deal counts at its stage's probability of closing. Commit takes only the deals already in
-                negotiation, and best case counts every open deal at full value.
+                negotiation. Best case counts every open deal at full value.
               </p>
             </div>
           </ChartCard>
